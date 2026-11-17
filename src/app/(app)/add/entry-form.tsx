@@ -3,6 +3,7 @@
 import { useActionState, useState, type CSSProperties } from "react";
 import { createTransaction, type FormState } from "@/app/actions";
 import { textOn } from "@/lib/color";
+import { useFormSubmit } from "@/lib/use-form-submit";
 import type { Category, TransactionType, WalletBalanceRow } from "@/lib/types";
 
 type Props = {
@@ -24,11 +25,12 @@ const chip =
 export function EntryForm({ wallets, categories, today, prefill }: Props) {
   const [state, action, pending] = useActionState<FormState, FormData>(createTransaction, {});
   const [type, setType] = useState<TransactionType>("expense");
+  const onSubmit = useFormSubmit(action);
   const spendable = wallets.filter((w) => w.counts_as_spendable);
   const defaultWallet = (spendable[0] ?? wallets[0])?.id;
 
   return (
-    <form action={action} className="flex flex-col gap-5">
+    <form onSubmit={onSubmit} className="flex flex-col gap-5">
       <fieldset>
         <legend className="sr-only">Kind of entry</legend>
         <div className="grid grid-cols-3 overflow-hidden rounded-[14px] border-2 border-ink">
@@ -54,7 +56,7 @@ export function EntryForm({ wallets, categories, today, prefill }: Props) {
         <label htmlFor="amount" className="label-mono text-muted">
           Amount
         </label>
-        <div className="flex h-16 items-center gap-1 rounded-2xl border-2 border-ink bg-slip px-4 shadow-hard">
+        <div className="flex h-16 items-center gap-1 rounded-2xl border-2 border-ink bg-slip px-4 shadow-hard focus-within:outline-3 focus-within:outline-offset-2 focus-within:outline-chili">
           <span aria-hidden="true" className="font-display text-2xl font-medium text-muted">
             ₱
           </span>
@@ -82,7 +84,7 @@ export function EntryForm({ wallets, categories, today, prefill }: Props) {
             maxLength={80}
             defaultValue={prefill.merchant}
             placeholder={type === "income" ? "Allowance, salary, gig…" : "Jollibee, Grab, photocopy…"}
-            className="h-12 rounded-xl border-2 border-ink bg-slip px-3 text-base outline-none"
+            className="h-12 rounded-xl border-2 border-ink bg-slip px-3 text-base"
           />
         </div>
       )}
@@ -167,7 +169,7 @@ export function EntryForm({ wallets, categories, today, prefill }: Props) {
           <label htmlFor="note" className="text-sm text-muted">
             Note <span className="text-xs">(optional)</span>
           </label>
-          <input id="note" name="note" maxLength={200} className="h-12 rounded-xl border-2 border-ink bg-slip px-3 text-base outline-none" />
+          <input id="note" name="note" maxLength={200} className="h-12 rounded-xl border-2 border-ink bg-slip px-3 text-base" />
         </div>
       </div>
 

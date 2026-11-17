@@ -35,19 +35,18 @@ export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
 
-  if (!signedIn && !isPublic) {
+  // Redirects must carry any refreshed session cookies, or the new session is lost.
+  const redirectTo = (pathname: string) => {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = pathname;
     url.search = "";
-    return NextResponse.redirect(url);
-  }
+    const redirect = NextResponse.redirect(url);
+    for (const cookie of response.cookies.getAll()) redirect.cookies.set(cookie);
+    return redirect;
+  };
 
-  if (signedIn && path === "/login") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
+  if (!signedIn && !isPublic) return redirectTo("/login");
+  if (signedIn && path === "/login") return redirectTo("/");
 
   return response;
 }

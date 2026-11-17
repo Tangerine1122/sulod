@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef } from "react";
 import { createWallet, type FormState } from "@/app/actions";
+import { useFormSubmit } from "@/lib/use-form-submit";
 
 const types = [
   { value: "cash", label: "Cash" },
@@ -13,13 +14,14 @@ const types = [
 export function WalletForm({ submitLabel = "Add wallet" }: { submitLabel?: string }) {
   const [state, action, pending] = useActionState<FormState, FormData>(createWallet, {});
   const formRef = useRef<HTMLFormElement>(null);
+  const onSubmit = useFormSubmit(action);
 
   useEffect(() => {
     if (state.ok) formRef.current?.reset();
   }, [state]);
 
   return (
-    <form ref={formRef} action={action} className="flex flex-col gap-4">
+    <form ref={formRef} onSubmit={onSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <label htmlFor="wallet-name" className="text-sm text-muted">
           Name
@@ -30,7 +32,7 @@ export function WalletForm({ submitLabel = "Add wallet" }: { submitLabel?: strin
           required
           maxLength={40}
           placeholder="Landbank, GoTyme, Cash…"
-          className="h-12 rounded-xl border-2 border-ink bg-slip px-3 text-base outline-none"
+          className="h-12 rounded-xl border-2 border-ink bg-slip px-3 text-base"
         />
       </div>
 
@@ -53,7 +55,7 @@ export function WalletForm({ submitLabel = "Add wallet" }: { submitLabel?: strin
         <label htmlFor="wallet-balance" className="text-sm text-muted">
           How much is in it right now?
         </label>
-        <div className="flex h-12 items-center gap-2 rounded-xl border-2 border-ink bg-slip px-3">
+        <div className="flex h-12 items-center gap-2 rounded-xl border-2 border-ink bg-slip px-3 focus-within:outline-3 focus-within:outline-offset-2 focus-within:outline-chili">
           <span aria-hidden="true" className="font-display font-bold text-muted">
             ₱
           </span>

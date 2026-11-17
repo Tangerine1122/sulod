@@ -91,6 +91,8 @@ describe("roughParse (stand-in until AI quick-add)", () => {
     expect(roughParse("jollibee 180")).toEqual({ merchant: "jollibee", amount: "180" });
     expect(roughParse("grab to uni 95.50")).toEqual({ merchant: "grab to uni", amount: "95.50" });
     expect(roughParse("₱1,200 tuition")).toEqual({ merchant: "tuition", amount: "1,200" });
+    expect(roughParse("7-eleven 85")).toEqual({ merchant: "7-eleven", amount: "85" });
+    expect(roughParse("grab 2 uni 95")).toEqual({ merchant: "grab 2 uni", amount: "95" });
     expect(roughParse("load")).toEqual({ merchant: "load", amount: "" });
     expect(roughParse("")).toEqual({ merchant: "", amount: "" });
   });

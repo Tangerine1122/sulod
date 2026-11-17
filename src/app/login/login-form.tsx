@@ -2,10 +2,12 @@
 
 import { useActionState } from "react";
 import { sendMagicLink, type LoginState } from "./actions";
+import { useFormSubmit } from "@/lib/use-form-submit";
 import { ArrowRightIcon } from "@/components/icons";
 
 export function LoginForm({ initialError }: { initialError?: string }) {
   const [state, action, pending] = useActionState<LoginState, FormData>(sendMagicLink, { error: initialError });
+  const onSubmit = useFormSubmit(action);
 
   if (state.sentTo) {
     return (
@@ -19,7 +21,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
   }
 
   return (
-    <form action={action} className="flex flex-col gap-3">
+    <form onSubmit={onSubmit} className="flex flex-col gap-3">
       <label htmlFor="email" className="font-display text-lg font-bold">
         Your email
       </label>
@@ -32,7 +34,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
           autoComplete="email"
           inputMode="email"
           placeholder="you@example.com"
-          className="h-14 min-w-0 flex-1 rounded-2xl border-2 border-ink bg-slip px-4 font-mono text-[15px] shadow-hard outline-none"
+          className="h-14 min-w-0 flex-1 rounded-2xl border-2 border-ink bg-slip px-4 font-mono text-[15px] shadow-hard"
         />
         <button
           type="submit"

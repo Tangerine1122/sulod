@@ -111,7 +111,7 @@ export default async function HomePage() {
             What did you spend on?
           </label>
           <div className="flex items-stretch gap-2">
-            <div className="flex h-14 min-w-0 flex-1 items-center gap-2 rounded-2xl border-2 border-ink bg-slip px-3.5 shadow-hard">
+            <div className="flex h-14 min-w-0 flex-1 items-center gap-2 rounded-2xl border-2 border-ink bg-slip px-3.5 shadow-hard focus-within:outline-3 focus-within:outline-offset-2 focus-within:outline-chili">
               <span aria-hidden="true" className="font-mono font-medium text-chili">
                 ›
               </span>
@@ -155,7 +155,7 @@ export default async function HomePage() {
                 diff > 0 ? "bg-dagat-soft text-dagat" : "bg-sand text-chili"
               }`}
             >
-              {formatPeso(Math.abs(diff), { whole: true })} {diff > 0 ? "less" : "more"} than last week
+              {formatPeso(Math.abs(diff), { whole: true })} {diff > 0 ? "less" : "more"} than this time last week
             </span>
           )}
         </div>

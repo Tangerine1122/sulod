@@ -77,13 +77,16 @@ export async function getSpendingByCategory(from: Date, to: Date): Promise<Categ
   return ((data ?? []) as CategorySpend[]).map((r) => ({ ...r, total_cents: toNumber(r.total_cents) }));
 }
 
-/** This week and last week (Monday-start, Manila time). */
+/**
+ * This week so far vs last week up to the same point (Monday-start, Manila time).
+ * Comparing a part-week against a full week would always look like spending less.
+ */
 export async function getWeekComparison(now: Date) {
   const thisWeek = manilaWeekRange(now);
   const lastWeek = manilaWeekRange(now, 1);
   const [current, previous] = await Promise.all([
     getSpendingByCategory(thisWeek.from, thisWeek.to),
-    getSpendingByCategory(lastWeek.from, lastWeek.to),
+    getSpendingByCategory(lastWeek.from, new Date(now.getTime() - 7 * 86_400_000)),
   ]);
   const sum = (rows: CategorySpend[]) => rows.reduce((s, r) => s + r.total_cents, 0);
   return { categories: current, thisWeekCents: sum(current), lastWeekCents: sum(previous) };

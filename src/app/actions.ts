@@ -134,7 +134,8 @@ export async function createTransaction(_: FormState, form: FormData): Promise<F
 
 export async function setAllowanceDay(form: FormData): Promise<void> {
   const userId = await requireUserId();
-  const day = z.coerce.number().int().min(0).max(6).safeParse(form.get("allowance_weekday"));
+  // No coercion: Number(null) is 0, which would silently save "Sunday".
+  const day = z.string().regex(/^[0-6]$/).transform(Number).safeParse(form.get("allowance_weekday"));
   if (!day.success) return;
   const supabase = await createClient();
   await supabase.from("profiles").update({ allowance_weekday: day.data }).eq("id", userId);
