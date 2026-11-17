@@ -232,3 +232,23 @@ as $$
   group by c.id, c.name, c.color
   order by 4 desc;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Grants: signed-in users only (RLS still limits them to their own rows)
+-- ---------------------------------------------------------------------------
+
+grant select, insert, update, delete on
+  public.profiles, public.wallets, public.categories, public.transactions, public.goals, public.gigs
+  to authenticated;
+grant select on public.wallet_balances to authenticated;
+
+revoke all on
+  public.profiles, public.wallets, public.categories, public.transactions, public.goals, public.gigs, public.wallet_balances
+  from anon;
+
+revoke execute on function public.spending_by_category(timestamptz, timestamptz) from public, anon;
+grant execute on function public.spending_by_category(timestamptz, timestamptz) to authenticated;
+
+-- Trigger functions are never called directly.
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+revoke execute on function public.check_transaction_refs() from public, anon;
