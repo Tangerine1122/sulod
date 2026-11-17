@@ -8,7 +8,7 @@ See [`PROJECT_CONTEXT.md`](./PROJECT_CONTEXT.md) for the full plan, data model a
 
 ## Stack
 
-Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Supabase (Postgres, Auth, Row Level Security) · Zod · Vitest
+Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Supabase (Postgres, Auth, Row Level Security) · AI SDK + Vercel AI Gateway · Zod · Vitest
 
 ## Getting started
 
@@ -33,7 +33,8 @@ Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Supabase (Postgres, 
 | --- | --- |
 | `npm run dev` | Start the dev server |
 | `npm run build` | Production build |
-| `npm test` | Unit tests for money, dates and safe-to-spend logic |
+| `npm test` | Unit tests for money, dates, safe-to-spend and quick-add logic |
+| `npm run eval:quick-add` | Runs 20 sample lines through the real model (needs `AI_GATEWAY_API_KEY`) |
 | `npm run typecheck` | TypeScript check |
 | `npm run lint` | ESLint |
 
@@ -43,7 +44,7 @@ Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Supabase (Postgres, 
 - Every table has Row Level Security (`user_id = auth.uid()`), and a trigger rejects entries that point at someone else's wallet or category.
 - Transfers between your own wallets change balances but never count as spending.
 - Savings wallets are left out of "safe to spend".
-- When AI features land, the model only parses text and explains numbers. Totals and verdicts are always computed in code or SQL.
+- The AI only reads what you type. It can only pick your own categories and wallets, amounts and dates are re-checked in code, nothing saves until you confirm, and if the AI is down the form still works.
 
 ## Status
 
@@ -52,7 +53,7 @@ Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Supabase (Postgres, 
 - [x] Manual entries: spent, received, moved between wallets
 - [x] Home: balances, safe to spend today, this week by category, recent entries
 - [x] Activity: month view, filters, edit and delete
-- [ ] AI quick-add with confirm card
+- [x] AI quick-add with confirm screen (Taglish/Cebuano aware)
 - [ ] Gig pay tracker
 - [ ] "Can I afford it?"
 - [ ] Insights and goals

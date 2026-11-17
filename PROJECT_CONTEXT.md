@@ -64,7 +64,12 @@ Rules:
 - Resolve relative dates ("yesterday") against the user's timezone (Asia/Manila).
 - Always show a confirm/edit card before saving; never write silently.
 - Handle Taglish/Cebuano shorthand ("kan-on 120", "pamasahe 20").
-- Until this ships, `src/lib/rough-parse.ts` prefills the manual form (amount + merchant only).
+- Implemented in `src/lib/quick-add/core.ts` (model call + deterministic `resolve`) and `/add` (confirm screen).
+- Model: `anthropic/claude-haiku-5.5` via AI Gateway (override with `QUICK_ADD_MODEL`). Output uses `generateText` + `Output.object` with category/wallet enums built from the user's own names.
+- The model returns the amount as written and a date; code converts to centavos, rejects future or older-than-a-year dates, maps names to ids, and applies the 0.6 threshold.
+- If the call fails or times out (8 s), `/add` falls back to `src/lib/rough-parse.ts` (amount + merchant only).
+- AI-filled entries save `source = 'ai_text'`, `ai_confidence` and `raw_input`.
+- Evals: `npm run eval:quick-add` (20 lines in `evals/quick-add.eval.ts`, needs `AI_GATEWAY_API_KEY`).
 
 ### 7.2 Screenshot/receipt parsing (v2)
 Image in, same schema out. Show extracted fields next to the image for quick correction.
@@ -124,7 +129,7 @@ Mockups: "Sulod — App Mockups" design canvas (https://claude.ai/artifact/HU38J
 1. ✅ Scaffold Next.js + Tailwind, Supabase schema, auth (email/magic link), RLS policies.
 2. ✅ Schema + seed default categories. Create wallets and transactions (manual form).
 3. ✅ Home (balances, safe to spend, this week, recent) and Activity (month view, filters, edit/delete).
-4. AI text entry (7.1) with confirm card and basic evals (20 sample lines with expected output).
+4. ✅ AI text entry (7.1) with confirm screen and 20-line evals (evals still to be run against the real model).
 5. Transfers between wallets, excluded from spending totals (✅ data + form; polish UI).
 6. Gig pay tracker (8.2).
 7. "Can I afford it?" (7.5), with evals for the verdict rules.

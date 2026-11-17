@@ -128,16 +128,30 @@ function occurredAtFor(date: string): Date {
   return isToday ? now : new Date(dayStart.getTime() + 12 * 3_600_000);
 }
 
+const aiFields = z.object({
+  source: z.literal("ai_text"),
+  ai_confidence: z.coerce.number().min(0).max(1),
+  raw_input: z.string().trim().min(1).max(200),
+});
+
 export async function createTransaction(_: FormState, form: FormData): Promise<FormState> {
   await requireUserId();
   const parsed = parseEntry(form);
   if ("error" in parsed) return { error: parsed.error };
 
+  // Entries the AI filled in keep its confidence and the original line (used later to learn
+  // merchant → category corrections). Anything malformed is simply saved as manual.
+  const ai = aiFields.safeParse({
+    source: form.get("source"),
+    ai_confidence: form.get("ai_confidence"),
+    raw_input: form.get("raw_input"),
+  });
+
   const supabase = await createClient();
   const { error } = await supabase.from("transactions").insert({
     ...entryColumns(parsed.data),
     occurred_at: occurredAtFor(parsed.data.date).toISOString(),
-    source: "manual",
+    ...(ai.success ? ai.data : { source: "manual" }),
   });
   if (error) return { error: "Couldn't save that. Try again." };
 

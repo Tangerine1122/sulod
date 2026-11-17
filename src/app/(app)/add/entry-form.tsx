@@ -17,6 +17,10 @@ export type EntryDefaults = {
   wallet_id?: string;
   transfer_to_wallet_id?: string | null;
   category_id?: string | null;
+  /** Set when the AI filled the form in; saved with the entry. */
+  ai?: { confidence: number; raw: string };
+  /** The AI wasn't sure of the category, so ask instead of guessing. */
+  askCategory?: boolean;
 };
 
 type Props = {
@@ -51,6 +55,13 @@ export function EntryForm({ wallets, categories, today, defaults }: Props) {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5">
       {defaults.id && <input type="hidden" name="id" value={defaults.id} />}
+      {defaults.ai && (
+        <>
+          <input type="hidden" name="source" value="ai_text" />
+          <input type="hidden" name="ai_confidence" value={defaults.ai.confidence} />
+          <input type="hidden" name="raw_input" value={defaults.ai.raw} />
+        </>
+      )}
       <fieldset>
         <legend className="sr-only">Kind of entry</legend>
         <div className="grid grid-cols-3 overflow-hidden rounded-[14px] border-2 border-ink">
@@ -111,7 +122,11 @@ export function EntryForm({ wallets, categories, today, defaults }: Props) {
 
       {type === "expense" && (
         <fieldset className="flex flex-col">
-          <legend className="mb-2 text-sm text-muted">Category</legend>
+          {defaults.askCategory ? (
+            <legend className="mb-2 text-base font-bold text-chili">Which category is this?</legend>
+          ) : (
+            <legend className="mb-2 text-sm text-muted">Category</legend>
+          )}
           <div className="flex flex-wrap gap-2">
             {categories.map((c) => (
               <label key={c.id} className="cursor-pointer">
