@@ -185,7 +185,13 @@ export async function quickAdd(text: string, ctx: Ctx): Promise<QuickAddResult> 
   try {
     return resolve(line, await askModel(line, ctx), ctx);
   } catch (error) {
-    console.error("quick-add: model call failed", error instanceof Error ? error.name : error);
+    // Log why (status and gateway message), never what the user typed.
+    const e = error as { name?: string; statusCode?: number; message?: string };
+    console.error(
+      `quick-add: model call failed (${QUICK_ADD_MODEL}) ${e?.name ?? "Error"} ${e?.statusCode ?? ""} ${String(e?.message ?? "")
+        .replaceAll(line, "[input]")
+        .slice(0, 300)}`,
+    );
     return fallback(line, ctx);
   }
 }
