@@ -2,6 +2,13 @@
 
 Read this at the start of each coding session. It is the source of truth for scope, data model and design.
 
+## 0. Where things live
+- Live app: https://sulod-inky.vercel.app (Vercel, deploys from `main`)
+- Code: https://github.com/Tangerine1122/sulod
+- Database: Supabase project `sulod` (ref `xcfhvhszblnrcthrwwmv`, region ap-southeast-1)
+- Mockups: https://claude.ai/artifact/HU38JUri2fz5UiYyVvn9KP
+- Supabase Auth redirect URLs: production `/auth/callback` and `http://localhost:3000/auth/callback`
+
 ## 1. What it is
 A personal expense and savings tracker for a student/part-time earner in the Philippines. The core idea: logging an expense should take under 5 seconds. The user types or pastes a casual line ("jollibee 180", "grab to uni 95") or uploads a screenshot of a receipt or e-wallet transaction, and AI turns it into a structured, categorized entry.
 
