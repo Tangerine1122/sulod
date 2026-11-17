@@ -19,7 +19,18 @@ export async function sendMagicLink(_: LoginState, form: FormData): Promise<Logi
     email: email.data,
     options: { emailRedirectTo: `${origin}/auth/callback` },
   });
-  if (error) return { error: "Couldn't send the link. Wait a minute and try again." };
+  if (error) {
+    if (error.code === "over_email_send_rate_limit") {
+      return {
+        error:
+          "Too many sign-in emails were sent in the last hour. Use the newest link already in your inbox, or try again in about an hour.",
+      };
+    }
+    if (error.code === "over_request_rate_limit") {
+      return { error: "Too many tries. Wait a minute and try again." };
+    }
+    return { error: "Couldn't send the link. Wait a minute and try again." };
+  }
 
   return { sentTo: email.data };
 }
