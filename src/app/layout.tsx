@@ -7,6 +7,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Sulod",
   description: "Log money in seconds. Know where it goes.",
+  applicationName: "Sulod",
+  // Opens full-screen from the iPhone home screen, like an app
+  appleWebApp: { capable: true, title: "Sulod", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
