@@ -1,26 +1,64 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Sulod design tokens: "receipt slip" direction. See PROJECT_CONTEXT.md §10. */
+@theme {
+  --color-paper: #f3ede2;
+  --color-slip: #fffbf4;
+  --color-ink: #1e1a16;
+  --color-ink-soft: #4a423a;
+  --color-muted: #6b6157;
+  --color-rule: #bdb2a4;
+  --color-sand: #e8e0d2;
+  --color-mango: #f2b33d;
+  --color-chili: #c4421a;
+  --color-dagat: #0e5a57;
+  --color-dagat-soft: #d6eae6;
+  --color-fog: #cfc5b8;
+
+  --font-display: "Bricolage Grotesque Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, monospace;
+
+  --shadow-hard: 4px 4px 0 var(--color-ink);
+  --shadow-hard-sm: 3px 3px 0 var(--color-ink);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@layer base {
+  html {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-tap-highlight-color: transparent;
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :focus-visible {
+    outline: 3px solid var(--color-chili);
+    outline-offset: 2px;
+  }
+
+  input::placeholder {
+    color: #7a6f64;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Small uppercase mono labels used across the app */
+@utility label-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Pressable: hard offset shadow that collapses on press */
+@utility press {
+  box-shadow: var(--shadow-hard);
+  transition: transform 80ms ease, box-shadow 80ms ease;
+  &:active {
+    transform: translate(3px, 3px);
+    box-shadow: 1px 1px 0 var(--color-ink);
+  }
 }

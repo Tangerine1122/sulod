@@ -1,0 +1,47 @@
+// Hand-written row types matching supabase/migrations. Replace with generated
+// types (`supabase gen types typescript`) once the project is linked.
+
+export type WalletType = "cash" | "debit" | "ewallet" | "savings";
+export type TransactionType = "expense" | "income" | "transfer";
+
+export type Profile = {
+  id: string;
+  display_name: string | null;
+  currency: string;
+  allowance_weekday: number | null;
+};
+
+export type Category = {
+  id: string;
+  name: string;
+  icon: string | null;
+  color: string;
+  is_default: boolean;
+};
+
+export type WalletBalanceRow = {
+  id: string;
+  name: string;
+  type: WalletType;
+  counts_as_spendable: boolean;
+  balance_cents: number;
+};
+
+export type TransactionRow = {
+  id: string;
+  type: TransactionType;
+  amount_cents: number;
+  merchant: string | null;
+  note: string | null;
+  occurred_at: string;
+  wallet: { name: string } | null;
+  to_wallet: { name: string } | null;
+  category: { name: string; color: string } | null;
+};
+
+export type CategorySpend = {
+  category_id: string | null;
+  name: string;
+  color: string;
+  total_cents: number;
+};
