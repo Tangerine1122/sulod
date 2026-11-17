@@ -14,7 +14,22 @@ import { parsePesoToCents } from "../money";
 import { roughParse } from "../rough-parse";
 import type { Category, TransactionType, WalletBalanceRow } from "../types";
 
-export const QUICK_ADD_MODEL = process.env.QUICK_ADD_MODEL ?? "anthropic/claude-haiku-5.5";
+/**
+ * Small, cheap models with structured output, tried in order. The free AI Gateway tier only
+ * allows some models, so a refused model (401/402/403/404) moves on to the next one. The
+ * first model that works is remembered for the life of the server instance.
+ * Set QUICK_ADD_MODEL to force one model.
+ */
+export const QUICK_ADD_MODELS = process.env.QUICK_ADD_MODEL
+  ? [process.env.QUICK_ADD_MODEL]
+  : [
+      "anthropic/claude-haiku-5.5",
+      "google/gemini-3.1-flash-lite",
+      "openai/gpt-5.4-nano",
+      "google/gemini-2.5-flash-lite",
+      "openai/gpt-5-nano",
+    ];
+let workingModel: string | null = null;
 export const CONFIDENCE_THRESHOLD = 0.6;
 export const MAX_INPUT = 200;
 
@@ -88,17 +103,43 @@ Line:
   return { system, prompt };
 }
 
+/** True for errors that mean "this model isn't available to you", where trying another helps. */
+function isRefusal(error: unknown): boolean {
+  const e = error as { statusCode?: number; name?: string };
+  return [401, 402, 403, 404].includes(e?.statusCode ?? 0) || /ModelNotFound|Authentication/.test(e?.name ?? "");
+}
+
 export async function askModel(text: string, ctx: Ctx): Promise<ModelOutput> {
   const { system, prompt } = buildPrompt(text, ctx);
-  const { output } = await generateText({
-    model: QUICK_ADD_MODEL,
-    system,
-    prompt,
-    output: Output.object({ schema: outputSchema(ctx), name: "entry" }),
-    timeout: 8000,
-    maxRetries: 1,
-  });
-  return output;
+  const candidates = workingModel ? [workingModel, ...QUICK_ADD_MODELS.filter((m) => m !== workingModel)] : QUICK_ADD_MODELS;
+  const started = Date.now();
+  let lastError: unknown;
+
+  for (const model of candidates) {
+    const remaining = 10_000 - (Date.now() - started);
+    if (remaining < 1500) break;
+    try {
+      const { output } = await generateText({
+        model,
+        system,
+        prompt,
+        output: Output.object({ schema: outputSchema(ctx), name: "entry" }),
+        timeout: Math.min(8000, remaining),
+        maxRetries: 0,
+      });
+      if (workingModel !== model) console.info(`quick-add: using ${model}`);
+      workingModel = model;
+      return output;
+    } catch (error) {
+      lastError = error;
+      const e = error as { name?: string; statusCode?: number; message?: string };
+      console.error(
+        `quick-add: ${model} failed ${e?.name ?? "Error"} ${e?.statusCode ?? ""} ${String(e?.message ?? "").replaceAll(text, "[input]").slice(0, 300)}`,
+      );
+      if (!isRefusal(error)) break; // timeouts and bad output won't get better on another model
+    }
+  }
+  throw lastError;
 }
 
 // ---------------------------------------------------------------------------
@@ -185,13 +226,8 @@ export async function quickAdd(text: string, ctx: Ctx): Promise<QuickAddResult> 
   try {
     return resolve(line, await askModel(line, ctx), ctx);
   } catch (error) {
-    // Log why (status and gateway message), never what the user typed.
-    const e = error as { name?: string; statusCode?: number; message?: string };
-    console.error(
-      `quick-add: model call failed (${QUICK_ADD_MODEL}) ${e?.name ?? "Error"} ${e?.statusCode ?? ""} ${String(e?.message ?? "")
-        .replaceAll(line, "[input]")
-        .slice(0, 300)}`,
-    );
+    // askModel already logged each model's reason (never what the user typed).
+    console.error("quick-add: falling back to the simple parser", error instanceof Error ? error.name : "");
     return fallback(line, ctx);
   }
 }

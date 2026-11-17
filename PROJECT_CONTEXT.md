@@ -65,7 +65,7 @@ Rules:
 - Always show a confirm/edit card before saving; never write silently.
 - Handle Taglish/Cebuano shorthand ("kan-on 120", "pamasahe 20").
 - Implemented in `src/lib/quick-add/core.ts` (model call + deterministic `resolve`) and `/add` (confirm screen).
-- Model: `anthropic/claude-haiku-5.5` via AI Gateway (override with `QUICK_ADD_MODEL`). Output uses `generateText` + `Output.object` with category/wallet enums built from the user's own names.
+- Models via AI Gateway, tried in order until one is allowed (free tier only covers some): Claude Haiku 5.5, Gemini 3.1 Flash Lite, GPT-5.4 nano, Gemini 2.5 Flash Lite, GPT-5 nano. Force one with `QUICK_ADD_MODEL`. Output uses `generateText` + `Output.object` with category/wallet enums built from the user's own names.
 - The model returns the amount as written and a date; code converts to centavos, rejects future or older-than-a-year dates, maps names to ids, and applies the 0.6 threshold.
 - If the call fails or times out (8 s), `/add` falls back to `src/lib/rough-parse.ts` (amount + merchant only).
 - AI-filled entries save `source = 'ai_text'`, `ai_confidence` and `raw_input`.
