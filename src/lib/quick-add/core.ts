@@ -23,11 +23,11 @@ import type { Category, TransactionType, WalletBalanceRow } from "../types";
 export const QUICK_ADD_MODELS = process.env.QUICK_ADD_MODEL
   ? [process.env.QUICK_ADD_MODEL]
   : [
-      "anthropic/claude-haiku-5.5",
-      "google/gemini-3.1-flash-lite",
-      "openai/gpt-5.4-nano",
+      "openai/gpt-5.4-nano", // confirmed working on the free tier (Nov 2026)
       "google/gemini-2.5-flash-lite",
       "openai/gpt-5-nano",
+      "anthropic/claude-haiku-5.5", // 403 on the free tier; used if credits are bought
+      "google/gemini-3.1-flash-lite", // 403 on the free tier
     ];
 let workingModel: string | null = null;
 export const CONFIDENCE_THRESHOLD = 0.6;
