@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeftIcon } from "@/components/icons";
 import { getCategories, getWalletBalances } from "@/lib/data";
-import { manilaParts } from "@/lib/dates";
+import { manilaDayKey } from "@/lib/dates";
 import { roughParse } from "@/lib/rough-parse";
 import { EntryForm } from "./entry-form";
 
@@ -14,8 +14,7 @@ export default async function AddPage({ searchParams }: PageProps<"/add">) {
   const [wallets, categories] = await Promise.all([getWalletBalances(), getCategories()]);
   if (wallets.length === 0) redirect("/");
 
-  const { y, m, d } = manilaParts(new Date());
-  const today = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const today = manilaDayKey(new Date());
 
   return (
     <main className="flex flex-col gap-5 px-4 pt-5 pb-8">
@@ -37,7 +36,7 @@ export default async function AddPage({ searchParams }: PageProps<"/add">) {
         </div>
       )}
 
-      <EntryForm wallets={wallets} categories={categories} today={today} prefill={roughParse(typed)} />
+      <EntryForm wallets={wallets} categories={categories} today={today} defaults={roughParse(typed)} />
     </main>
   );
 }

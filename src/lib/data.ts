@@ -3,7 +3,15 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { manilaWeekRange } from "@/lib/dates";
-import type { Category, CategorySpend, Profile, TransactionRow, WalletBalanceRow } from "@/lib/types";
+import type {
+  Category,
+  CategorySpend,
+  Profile,
+  TransactionDetail,
+  TransactionRow,
+  TransactionType,
+  WalletBalanceRow,
+} from "@/lib/types";
 
 // Postgres bigint arrives as a string; money must be a number of centavos in the app.
 const toNumber = (v: unknown) => (typeof v === "string" ? Number(v) : (v as number));
@@ -90,4 +98,75 @@ export async function getWeekComparison(now: Date) {
   ]);
   const sum = (rows: CategorySpend[]) => rows.reduce((s, r) => s + r.total_cents, 0);
   return { categories: current, thisWeekCents: sum(current), lastWeekCents: sum(previous) };
+}
+
+// ---------------------------------------------------------------------------
+// Activity
+// ---------------------------------------------------------------------------
+
+const TX_SELECT =
+  "id, type, amount_cents, merchant, note, occurred_at, wallet_id, transfer_to_wallet_id, category_id, wallet:wallets!transactions_wallet_id_fkey(name), to_wallet:wallets!transactions_transfer_to_wallet_id_fkey(name), category:categories(name, color)";
+
+export type ActivityFilters = {
+  from: Date;
+  to: Date;
+  type?: TransactionType;
+  walletId?: string;
+  categoryId?: string;
+};
+
+function applyFilters<Q extends { eq: (c: string, v: string) => Q; or: (f: string) => Q }>(q: Q, f: ActivityFilters): Q {
+  let out = q;
+  if (f.type) out = out.eq("type", f.type);
+  // A wallet filter shows money leaving and arriving, so transfers into it are included.
+  if (f.walletId) out = out.or(`wallet_id.eq.${f.walletId},transfer_to_wallet_id.eq.${f.walletId}`);
+  if (f.categoryId) out = out.eq("category_id", f.categoryId);
+  return out;
+}
+
+/** Entries in a time range, newest first, plus whether more exist past `limit`. */
+export async function getActivity(f: ActivityFilters, limit: number) {
+  const supabase = await createClient();
+  const query = supabase
+    .from("transactions")
+    .select(TX_SELECT)
+    .gte("occurred_at", f.from.toISOString())
+    .lt("occurred_at", f.to.toISOString());
+  const { data, error } = await applyFilters(query, f)
+    .order("occurred_at", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit + 1);
+  if (error) throw error;
+  const rows = (data ?? []).map((t) => ({
+    ...(t as unknown as TransactionDetail),
+    amount_cents: toNumber(t.amount_cents),
+  }));
+  return { rows: rows.slice(0, limit), hasMore: rows.length > limit };
+}
+
+/** Spent and received totals for the same filters (transfers are neither). */
+export async function getActivityTotals(f: ActivityFilters) {
+  const supabase = await createClient();
+  const query = supabase
+    .from("transactions")
+    .select("type, amount_cents")
+    .gte("occurred_at", f.from.toISOString())
+    .lt("occurred_at", f.to.toISOString());
+  const { data, error } = await applyFilters(query, f);
+  if (error) throw error;
+  let spentCents = 0;
+  let receivedCents = 0;
+  for (const t of data ?? []) {
+    if (t.type === "expense") spentCents += toNumber(t.amount_cents);
+    if (t.type === "income") receivedCents += toNumber(t.amount_cents);
+  }
+  return { spentCents, receivedCents };
+}
+
+export async function getTransaction(id: string): Promise<TransactionDetail | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("transactions").select(TX_SELECT).eq("id", id).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return { ...(data as unknown as TransactionDetail), amount_cents: toNumber(data.amount_cents) };
 }

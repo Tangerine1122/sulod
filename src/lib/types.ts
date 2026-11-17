@@ -45,3 +45,9 @@ export type CategorySpend = {
   color: string;
   total_cents: number;
 };
+
+export type TransactionDetail = TransactionRow & {
+  wallet_id: string;
+  transfer_to_wallet_id: string | null;
+  category_id: string | null;
+};

@@ -1,15 +1,14 @@
 import { connection } from "next/server";
 import Link from "next/link";
 import { AllowanceDayForm } from "@/components/allowance-day-form";
-import { ArrowRightIcon, SlidersIcon, TransferIcon } from "@/components/icons";
+import { ArrowRightIcon, SlidersIcon } from "@/components/icons";
+import { TransactionRow } from "@/components/transaction-row";
 import { WalletForm } from "@/components/wallet-form";
 import { Zigzag } from "@/components/zigzag";
 import { getProfile, getRecentTransactions, getWalletBalances, getWeekComparison } from "@/lib/data";
 import { formatManila, greeting, weekdayName } from "@/lib/dates";
-import { textOn } from "@/lib/color";
 import { formatPeso, splitPeso } from "@/lib/money";
 import { safeToSpend } from "@/lib/safe-to-spend";
-import type { TransactionRow } from "@/lib/types";
 
 export default async function HomePage() {
   await connection(); // per-request: balances and "today" must never be prerendered
@@ -203,7 +202,7 @@ export default async function HomePage() {
         ) : (
           <ul className="flex flex-col">
             {recent.map((t) => (
-              <RecentRow key={t.id} t={t} />
+              <TransactionRow key={t.id} t={t} />
             ))}
           </ul>
         )}
@@ -229,50 +228,5 @@ function Header({ now, name }: { now: Date; name: string }) {
         <SlidersIcon size={20} />
       </Link>
     </header>
-  );
-}
-
-function RecentRow({ t }: { t: TransactionRow }) {
-  const title = t.type === "transfer" ? `${t.wallet?.name} → ${t.to_wallet?.name}` : (t.merchant ?? t.category?.name ?? (t.type === "income" ? "Income" : "Expense"));
-  const when = formatManila(t.occurred_at, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-  const detail =
-    t.type === "transfer"
-      ? "Transfer · not counted as spending"
-      : `${t.type === "income" ? "Income" : (t.category?.name ?? "Uncategorized")} · ${t.wallet?.name ?? ""} · ${when}`;
-
-  return (
-    <li className="flex items-center gap-3 border-b border-dashed border-rule py-2.5 last:border-b-0">
-      {t.type === "transfer" ? (
-        <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-xl border-[1.5px] border-ink">
-          <TransferIcon size={18} />
-        </span>
-      ) : (
-        <span
-          aria-hidden="true"
-          className={`flex size-10 shrink-0 items-center justify-center rounded-xl font-display font-extrabold ${
-            t.type === "income" ? "bg-dagat-soft text-dagat" : "text-ink"
-          }`}
-          style={
-            t.type === "expense"
-              ? { background: t.category?.color ?? "#cfc5b8", color: textOn(t.category?.color ?? "#cfc5b8") }
-              : undefined
-          }
-        >
-          {title.charAt(0).toUpperCase()}
-        </span>
-      )}
-      <div className="flex min-w-0 flex-1 flex-col gap-px">
-        <span className="truncate font-semibold">{title}</span>
-        <span className="truncate text-xs text-muted">{detail}</span>
-      </div>
-      <span
-        className={`tabular font-display font-bold ${
-          t.type === "income" ? "text-dagat" : t.type === "transfer" ? "text-muted" : ""
-        }`}
-      >
-        {t.type === "income" ? "+" : t.type === "expense" ? "−" : ""}
-        {formatPeso(t.amount_cents)}
-      </span>
-    </li>
   );
 }

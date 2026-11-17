@@ -6,7 +6,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireUserId } from "@/lib/data";
 import { parsePesoToCents } from "@/lib/money";
-import { manilaMidnight } from "@/lib/dates";
+import { manilaDayKey, manilaMidnight } from "@/lib/dates";
 
 export type FormState = { error?: string; ok?: boolean };
 
@@ -88,8 +88,9 @@ const transactionSchema = z
 
 const blankToUndefined = (v: FormDataEntryValue | null) => (v === null || v === "" ? undefined : String(v));
 
-export async function createTransaction(_: FormState, form: FormData): Promise<FormState> {
-  await requireUserId();
+type ParsedEntry = z.infer<typeof transactionSchema>;
+
+function parseEntry(form: FormData): { data: ParsedEntry } | { error: string } {
   const parsed = transactionSchema.safeParse({
     type: form.get("type") ?? "",
     amount: form.get("amount") ?? "",
@@ -101,31 +102,91 @@ export async function createTransaction(_: FormState, form: FormData): Promise<F
     date: form.get("date") ?? "",
   });
   if (!parsed.success) return { error: firstError(parsed.error) };
-  const t = parsed.data;
+  if (parsed.data.date > manilaDayKey(new Date())) return { error: "That date is in the future." };
+  return { data: parsed.data };
+}
 
-  // A date picked today keeps the current time; other days are stored as noon Manila time.
-  const [y, m, d] = t.date.split("-").map(Number);
-  const dayStart = manilaMidnight(y, m, d);
-  const now = new Date();
-  const isToday = now >= dayStart && now.getTime() < dayStart.getTime() + 86_400_000;
-  const occurredAt = isToday ? now : new Date(dayStart.getTime() + 12 * 3_600_000);
-
-  const supabase = await createClient();
-  const { error } = await supabase.from("transactions").insert({
+/** Columns shared by insert and update. Fields that don't apply to the type are cleared. */
+function entryColumns(t: ParsedEntry) {
+  return {
     type: t.type,
     amount_cents: t.amount,
     wallet_id: t.wallet_id,
     transfer_to_wallet_id: t.type === "transfer" ? t.transfer_to_wallet_id : null,
     category_id: t.type === "expense" ? (t.category_id ?? null) : null,
-    merchant: t.merchant ?? null,
+    merchant: t.type === "transfer" ? null : (t.merchant ?? null),
     note: t.note ?? null,
-    occurred_at: occurredAt.toISOString(),
+  };
+}
+
+/** A date picked today keeps the current time; other days are stored as noon Manila time. */
+function occurredAtFor(date: string): Date {
+  const [y, m, d] = date.split("-").map(Number);
+  const dayStart = manilaMidnight(y, m, d);
+  const now = new Date();
+  const isToday = now >= dayStart && now.getTime() < dayStart.getTime() + 86_400_000;
+  return isToday ? now : new Date(dayStart.getTime() + 12 * 3_600_000);
+}
+
+export async function createTransaction(_: FormState, form: FormData): Promise<FormState> {
+  await requireUserId();
+  const parsed = parseEntry(form);
+  if ("error" in parsed) return { error: parsed.error };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("transactions").insert({
+    ...entryColumns(parsed.data),
+    occurred_at: occurredAtFor(parsed.data.date).toISOString(),
     source: "manual",
   });
   if (error) return { error: "Couldn't save that. Try again." };
 
   revalidatePath("/", "layout");
   redirect("/");
+}
+
+const idSchema = z.uuid();
+
+export async function updateTransaction(_: FormState, form: FormData): Promise<FormState> {
+  await requireUserId();
+  const id = idSchema.safeParse(form.get("id"));
+  if (!id.success) return { error: "That entry no longer exists." };
+  const parsed = parseEntry(form);
+  if ("error" in parsed) return { error: parsed.error };
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("transactions")
+    .select("occurred_at")
+    .eq("id", id.data)
+    .maybeSingle();
+  if (!existing) return { error: "That entry no longer exists." };
+
+  // Keep the original time unless the day was changed.
+  const sameDay = manilaDayKey(existing.occurred_at) === parsed.data.date;
+  const { error } = await supabase
+    .from("transactions")
+    .update({
+      ...entryColumns(parsed.data),
+      occurred_at: sameDay ? existing.occurred_at : occurredAtFor(parsed.data.date).toISOString(),
+    })
+    .eq("id", id.data);
+  if (error) return { error: "Couldn't save the changes. Try again." };
+
+  revalidatePath("/", "layout");
+  redirect("/activity");
+}
+
+export async function deleteTransaction(form: FormData): Promise<void> {
+  await requireUserId();
+  const id = idSchema.safeParse(form.get("id"));
+  if (id.success) {
+    const supabase = await createClient();
+    // RLS limits this to the signed-in user's own rows.
+    await supabase.from("transactions").delete().eq("id", id.data);
+  }
+  revalidatePath("/", "layout");
+  redirect("/activity");
 }
 
 // ---------------------------------------------------------------------------

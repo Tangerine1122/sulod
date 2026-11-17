@@ -42,3 +42,28 @@ export function greeting(now: Date): string {
   if (hour < 18) return "Good afternoon";
   return "Good evening";
 }
+
+/** "2026-11" for the Manila month containing `instant`. */
+export function manilaMonthKey(instant: Date): string {
+  const { y, m } = manilaParts(instant);
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+/** UTC range of a Manila calendar month given as "YYYY-MM". */
+export function manilaMonthRange(key: string): { from: Date; to: Date } {
+  const [y, m] = key.split("-").map(Number);
+  return { from: manilaMidnight(y, m, 1), to: manilaMidnight(y, m + 1, 1) };
+}
+
+/** Shifts a "YYYY-MM" key by whole months. */
+export function shiftMonth(key: string, by: number): string {
+  const [y, m] = key.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + by, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** "2026-11-17": the Manila calendar day of an instant, for grouping and <input type="date">. */
+export function manilaDayKey(instant: Date | string): string {
+  const { y, m, d } = manilaParts(new Date(instant));
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}

@@ -51,7 +51,7 @@ Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Supabase (Postgres, 
 - [x] Wallets with live balances
 - [x] Manual entries: spent, received, moved between wallets
 - [x] Home: balances, safe to spend today, this week by category, recent entries
-- [ ] Activity list with edit and delete
+- [x] Activity: month view, filters, edit and delete
 - [ ] AI quick-add with confirm card
 - [ ] Gig pay tracker
 - [ ] "Can I afford it?"

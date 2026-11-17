@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatPeso, parsePesoToCents, splitPeso } from "./money";
-import { manilaParts, manilaWeekRange } from "./dates";
+import { manilaDayKey, manilaMonthKey, manilaMonthRange, manilaParts, manilaWeekRange, shiftMonth } from "./dates";
 import { daysUntilAllowance, safeToSpend } from "./safe-to-spend";
 import { textOn } from "./color";
 import { roughParse } from "./rough-parse";
@@ -95,5 +95,24 @@ describe("roughParse (stand-in until AI quick-add)", () => {
     expect(roughParse("grab 2 uni 95")).toEqual({ merchant: "grab 2 uni", amount: "95" });
     expect(roughParse("load")).toEqual({ merchant: "load", amount: "" });
     expect(roughParse("")).toEqual({ merchant: "", amount: "" });
+  });
+});
+
+
+describe("month helpers", () => {
+  it("uses Manila months", () => {
+    // Nov 30 23:30 Manila is still November there, though it's Nov 30 15:30 UTC
+    expect(manilaMonthKey(new Date("2026-11-30T15:30:00Z"))).toBe("2026-11");
+    // Dec 1 00:30 Manila is Nov 30 16:30 UTC but December in Manila
+    expect(manilaMonthKey(new Date("2026-11-30T16:30:00Z"))).toBe("2026-12");
+    expect(manilaDayKey("2026-11-30T16:30:00Z")).toBe("2026-12-01");
+  });
+
+  it("gives month ranges and shifts across years", () => {
+    const { from, to } = manilaMonthRange("2026-12");
+    expect(from.toISOString()).toBe("2026-11-30T16:00:00.000Z");
+    expect(to.toISOString()).toBe("2026-12-31T16:00:00.000Z");
+    expect(shiftMonth("2026-12", 1)).toBe("2027-01");
+    expect(shiftMonth("2027-01", -1)).toBe("2026-12");
   });
 });

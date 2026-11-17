@@ -123,7 +123,7 @@ Mockups: "Sulod — App Mockups" design canvas (https://claude.ai/artifact/HU38J
 ## 11. Build order
 1. ✅ Scaffold Next.js + Tailwind, Supabase schema, auth (email/magic link), RLS policies.
 2. ✅ Schema + seed default categories. Create wallets and transactions (manual form).
-3. Home ✅ (balances, safe to spend, this week, recent) and Activity screen with edit/delete.
+3. ✅ Home (balances, safe to spend, this week, recent) and Activity (month view, filters, edit/delete).
 4. AI text entry (7.1) with confirm card and basic evals (20 sample lines with expected output).
 5. Transfers between wallets, excluded from spending totals (✅ data + form; polish UI).
 6. Gig pay tracker (8.2).
