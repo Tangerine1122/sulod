@@ -9,7 +9,7 @@ import { MAX_INPUT, quickAdd, type QuickAddResult } from "@/lib/quick-add";
 import { EntryForm, type EntryDefaults } from "./entry-form";
 
 export default async function AddPage({ searchParams }: PageProps<"/add">) {
-  const { q, merchant, amount } = await searchParams;
+  const { q, merchant, amount, type, to } = await searchParams;
   await connection();
   const typed = typeof q === "string" ? q.trim().slice(0, MAX_INPUT) : "";
   const [wallets, categories] = await Promise.all([getWalletBalances(), getCategories()]);
@@ -27,6 +27,8 @@ export default async function AddPage({ searchParams }: PageProps<"/add">) {
 
   // Plain prefill (e.g. "Log this purchase" from the afford screen), no AI.
   const prefill: EntryDefaults = {
+    type: type === "transfer" || type === "income" ? type : undefined,
+    transfer_to_wallet_id: typeof to === "string" && wallets.some((w) => w.id === to) ? to : undefined,
     merchant: typeof merchant === "string" ? merchant.slice(0, 80) : undefined,
     amount: typeof amount === "string" && parsePesoToCents(amount) !== null ? amount : undefined,
   };

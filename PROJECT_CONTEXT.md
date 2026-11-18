@@ -48,7 +48,7 @@ Primary user: one person with a mix of income streams (weekly allowance, salary,
 - `wallets`: id, user_id, name, type (cash | debit | ewallet | savings), starting_balance_cents, counts_as_spendable (default true; false for savings), archived
 - `categories`: id, user_id, name, icon, color, is_default
 - `transactions`: id, user_id, wallet_id, category_id (nullable), type (expense | income | transfer), amount_cents, merchant, note, occurred_at, source (manual | ai_text | ai_image), ai_confidence (nullable), raw_input (nullable), transfer_to_wallet_id (nullable)
-- `goals`: id, user_id, name, target_cents, target_date (nullable), wallet_id (nullable)
+- `goals`: id, user_id, name, target_cents, saved_cents (amount set aside from savings, envelope-style), target_date (nullable), wallet_id (nullable, unused for now)
 - `gigs`: id, user_id, title, work_date, hours (numeric, nullable), expected_cents, status (pending | paid), paid_at (nullable), wallet_id (nullable), transaction_id (nullable; the income row created when marked paid)
 - `wallet_balances` view and `spending_by_category(from, to)` function, both security invoker so RLS applies.
 - Row Level Security on every table: `user_id = auth.uid()`. A trigger also rejects transactions that point at another user's wallet or category.
@@ -113,6 +113,17 @@ For irregular income such as event shifts.
 - Mark paid / undo / delete are SQL functions (`mark_gig_paid`, `undo_gig_paid`, `delete_gig`) so the gig and its income entry change together. Deleting a gig's income entry from Activity puts the gig back to pending (trigger).
 - New shifts start from the last shift's title, hours and pay.
 
+### 8.3 Insights (v1) — implemented (`/insights`, `src/lib/insights.ts`, `src/components/insights.tsx`)
+- Week (Mon-start) or month, so far, compared with the previous period up to the same point (month clamped to its length).
+- By category: two thin bars per category, this period (dark teal `#0E5A57`) over the same days before (light teal `#7FB5AD`). The pair passes the dataviz ordinal checks; the light step is under 3:1, so values are written out and there's a table view.
+- Day by day: one column per day (future days empty), only the highest day labelled (in chili), axis top rounded by `niceMax`.
+
+### 8.4 Goals (v1) — implemented (`/goals`, `src/lib/goals.ts`, migration `20261118010000_goal_savings.sql`)
+- Savings wallets hold the money; each goal has `saved_cents` set aside from it (envelopes), so goals never double-count the same pesos.
+- "Set aside" only allows what isn't set aside yet; "Take out" only what the goal holds. If savings later drop below what's set aside, the screen says so.
+- With a date: weekly amount = remaining ÷ weeks left (rounded up to a peso). Past date shows "Date passed".
+- Deleting a goal leaves the money in savings. "Move money" opens a transfer into the savings wallet.
+
 ## 9. Screens
 Bottom navigation: Home, Activity, Gigs, Insights, Goals. Settings opens from the Home header.
 1. **Home**: wallet balances, safe to spend today, quick-add input (also takes "can I afford" questions), this week's spend, recent transactions.
@@ -140,7 +151,7 @@ Mockups: "Sulod — App Mockups" design canvas (https://claude.ai/artifact/HU38J
 5. Transfers between wallets, excluded from spending totals (✅ data + form; polish UI).
 6. ✅ Gig pay tracker (8.2).
 7. ✅ "Can I afford it?" (7.5), with unit tests for every verdict rule.
-8. Insights charts, then goals.
+8. ✅ Insights charts (week/month, by category, day by day) and goals (envelopes from savings, weekly amount to hit a date).
 9. Screenshot parsing (7.2), PWA install, CSV export.
 10. Weekly AI summary and merchant overrides (7.3, 7.4).
 

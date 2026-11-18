@@ -56,5 +56,6 @@ Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Supabase (Postgres, 
 - [x] AI quick-add with confirm screen (Taglish/Cebuano aware)
 - [x] Gig pay tracker: log shifts, see pay still owed, mark paid into a wallet
 - [x] "Can I afford it?": YES / TIGHT / NOT YET from your real balances, explained by the AI
-- [ ] Insights and goals
+- [x] Insights: week/month by category and day, vs the same days before
+- [x] Goals: set money aside from savings, weekly amount to hit a date
 - [ ] Receipt scanning, PWA, CSV export

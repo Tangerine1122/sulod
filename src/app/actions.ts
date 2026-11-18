@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { requireUserId } from "@/lib/data";
-import { parsePesoToCents } from "@/lib/money";
+import { getGoal, getGoals, getWalletBalances, requireUserId } from "@/lib/data";
+import { unassignedSavings } from "@/lib/goals";
+import { formatPeso, parsePesoToCents } from "@/lib/money";
 import { manilaDayKey, manilaMidnight } from "@/lib/dates";
 
 export type FormState = { error?: string; ok?: boolean };
@@ -348,4 +349,109 @@ export async function deleteGig(form: FormData): Promise<void> {
   }
   revalidatePath("/", "layout");
   redirect("/gigs");
+}
+
+// ---------------------------------------------------------------------------
+// Goals
+// ---------------------------------------------------------------------------
+
+const goalSchema = z.object({
+  name: z.string().trim().min(1, "Give the goal a name").max(40),
+  target: pesoField,
+  target_date: z.union([z.literal(""), z.iso.date()]).transform((v) => v || null),
+});
+
+function parseGoal(form: FormData) {
+  const parsed = goalSchema.safeParse({
+    name: form.get("name") ?? "",
+    target: form.get("target") ?? "",
+    target_date: form.get("target_date") ?? "",
+  });
+  if (!parsed.success) return { error: firstError(parsed.error) } as const;
+  if (parsed.data.target_date && parsed.data.target_date < manilaDayKey(new Date())) {
+    return { error: "Pick a date from today on." } as const;
+  }
+  return { data: parsed.data } as const;
+}
+
+export async function createGoal(_: FormState, form: FormData): Promise<FormState> {
+  await requireUserId();
+  const parsed = parseGoal(form);
+  if ("error" in parsed) return { error: parsed.error };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("goals")
+    .insert({ name: parsed.data.name, target_cents: parsed.data.target, target_date: parsed.data.target_date });
+  if (error) return { error: "Couldn't save the goal. Try again." };
+  revalidatePath("/", "layout");
+  redirect("/goals");
+}
+
+export async function updateGoal(_: FormState, form: FormData): Promise<FormState> {
+  await requireUserId();
+  const id = idSchema.safeParse(form.get("id"));
+  if (!id.success) return { error: "That goal no longer exists." };
+  const parsed = parseGoal(form);
+  if ("error" in parsed) return { error: parsed.error };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("goals")
+    .update({ name: parsed.data.name, target_cents: parsed.data.target, target_date: parsed.data.target_date })
+    .eq("id", id.data);
+  if (error) return { error: "Couldn't save the changes. Try again." };
+  revalidatePath("/", "layout");
+  redirect("/goals");
+}
+
+export async function deleteGoal(form: FormData): Promise<void> {
+  await requireUserId();
+  const id = idSchema.safeParse(form.get("id"));
+  if (id.success) {
+    const supabase = await createClient();
+    // The money stays in savings; it just stops being set aside for this goal.
+    await supabase.from("goals").delete().eq("id", id.data);
+  }
+  revalidatePath("/", "layout");
+  redirect("/goals");
+}
+
+const adjustSchema = z.object({ id: z.uuid(), direction: z.enum(["add", "remove"]), amount: pesoField });
+
+/** Sets money aside for a goal from savings that isn't set aside yet, or gives it back. */
+export async function adjustGoal(_: FormState, form: FormData): Promise<FormState> {
+  await requireUserId();
+  const parsed = adjustSchema.safeParse({
+    id: form.get("id") ?? "",
+    direction: form.get("direction") ?? "",
+    amount: form.get("amount") ?? "",
+  });
+  if (!parsed.success) return { error: firstError(parsed.error) };
+  const { id, direction, amount } = parsed.data;
+
+  const [goal, goals, wallets] = await Promise.all([getGoal(id), getGoals(), getWalletBalances()]);
+  if (!goal) return { error: "That goal no longer exists." };
+
+  let saved: number;
+  if (direction === "add") {
+    const savings = wallets.filter((w) => !w.counts_as_spendable).reduce((s, w) => s + w.balance_cents, 0);
+    const free = unassignedSavings(savings, goals);
+    if (amount > free) {
+      return {
+        error:
+          free > 0
+            ? `Only ${formatPeso(free)} of your savings isn't set aside yet. Move more into savings first.`
+            : "All your savings are already set aside. Move more into savings first.",
+      };
+    }
+    saved = goal.saved_cents + amount;
+  } else {
+    if (amount > goal.saved_cents) return { error: `Only ${formatPeso(goal.saved_cents)} is set aside for this goal.` };
+    saved = goal.saved_cents - amount;
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("goals").update({ saved_cents: saved }).eq("id", id);
+  if (error) return { error: "Couldn't save that. Try again." };
+  revalidatePath("/", "layout");
+  return { ok: true };
 }

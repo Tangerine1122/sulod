@@ -66,3 +66,11 @@ export type Gig = {
   paid_cents: number | null;
   wallet_name: string | null;
 };
+
+export type Goal = {
+  id: string;
+  name: string;
+  target_cents: number;
+  saved_cents: number;
+  target_date: string | null;
+};

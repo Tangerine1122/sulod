@@ -3,11 +3,13 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { HISTORY_WINDOW_DAYS } from "@/lib/afford";
+import { bucketByDay, periodRanges, type Period } from "@/lib/insights";
 import { manilaDayKey, manilaMidnight, manilaMonthKey, manilaWeekRange } from "@/lib/dates";
 import type {
   Category,
   CategorySpend,
   Gig,
+  Goal,
   Profile,
   TransactionDetail,
   TransactionRow,
@@ -273,4 +275,81 @@ export async function getSpendingHistory(now: Date) {
     historyDays = Math.floor((now.getTime() - manilaMidnight(y, m, d).getTime()) / 86_400_000) + 1;
   }
   return { expenseCents, historyDays };
+}
+
+// ---------------------------------------------------------------------------
+// Insights
+// ---------------------------------------------------------------------------
+
+export async function getInsights(now: Date, period: Period) {
+  const ranges = periodRanges(now, period);
+  const supabase = await createClient();
+  const [current, previous, rows] = await Promise.all([
+    getSpendingByCategory(ranges.current.from, now),
+    getSpendingByCategory(ranges.previousSamePoint.from, ranges.previousSamePoint.to),
+    supabase
+      .from("transactions")
+      .select("amount_cents, occurred_at")
+      .eq("type", "expense")
+      .gte("occurred_at", ranges.current.from.toISOString())
+      .lt("occurred_at", ranges.current.to.toISOString()),
+  ]);
+  if (rows.error) throw rows.error;
+
+  const days = bucketByDay(
+    (rows.data ?? []).map((r) => ({ amount_cents: toNumber(r.amount_cents), occurred_at: r.occurred_at })),
+    ranges.current.from,
+    ranges.days,
+    now,
+  );
+
+  // One row per category seen in either period, biggest this period first.
+  const byId = new Map<string, { name: string; color: string; currentCents: number; previousCents: number }>();
+  for (const c of current) byId.set(c.category_id ?? "none", { name: c.name, color: c.color, currentCents: c.total_cents, previousCents: 0 });
+  for (const c of previous) {
+    const row = byId.get(c.category_id ?? "none");
+    if (row) row.previousCents = c.total_cents;
+    else byId.set(c.category_id ?? "none", { name: c.name, color: c.color, currentCents: 0, previousCents: c.total_cents });
+  }
+  const categories = [...byId.entries()]
+    .map(([id, r]) => ({ id, ...r }))
+    .sort((a, b) => b.currentCents - a.currentCents || b.previousCents - a.previousCents);
+
+  return {
+    period,
+    from: ranges.current.from,
+    totalCents: current.reduce((s, c) => s + c.total_cents, 0),
+    previousCents: previous.reduce((s, c) => s + c.total_cents, 0),
+    categories,
+    days,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Goals
+// ---------------------------------------------------------------------------
+
+type GoalRow = Omit<Goal, "target_cents" | "saved_cents"> & { target_cents: number | string; saved_cents: number | string };
+const toGoal = (g: GoalRow): Goal => ({ ...g, target_cents: toNumber(g.target_cents), saved_cents: toNumber(g.saved_cents) });
+
+export async function getGoals(): Promise<Goal[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("goals")
+    .select("id, name, target_cents, saved_cents, target_date")
+    .order("target_date", { ascending: true, nullsFirst: false })
+    .order("created_at");
+  if (error) throw error;
+  return (data ?? []).map((g) => toGoal(g as GoalRow));
+}
+
+export async function getGoal(id: string): Promise<Goal | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("goals")
+    .select("id, name, target_cents, saved_cents, target_date")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? toGoal(data as GoalRow) : null;
 }
