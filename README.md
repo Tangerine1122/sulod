@@ -13,7 +13,7 @@ Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Supabase (Postgres, 
 ## Getting started
 
 1. **Create a Supabase project** at [supabase.com](https://supabase.com) (the free tier is fine).
-2. **Run the migration.** In the Supabase dashboard open SQL Editor, paste `supabase/migrations/20261117000000_init.sql`, and run it. (Or with the Supabase CLI: `supabase link` then `supabase db push`.)
+2. **Run the migrations.** In the Supabase dashboard open SQL Editor and run each file in `supabase/migrations/` in order. (Or with the Supabase CLI: `supabase link` then `supabase db push`.)
 3. **Allow the magic-link redirect.** In Authentication → URL Configuration, add `http://localhost:3000/auth/callback` to Redirect URLs.
 4. **Add your keys.**
    ```bash
@@ -54,7 +54,7 @@ Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Supabase (Postgres, 
 - [x] Home: balances, safe to spend today, this week by category, recent entries
 - [x] Activity: month view, filters, edit and delete
 - [x] AI quick-add with confirm screen (Taglish/Cebuano aware)
-- [ ] Gig pay tracker
+- [x] Gig pay tracker: log shifts, see pay still owed, mark paid into a wallet
 - [ ] "Can I afford it?"
 - [ ] Insights and goals
 - [ ] Receipt scanning, PWA, CSV export

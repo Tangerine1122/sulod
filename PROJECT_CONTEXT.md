@@ -99,12 +99,14 @@ One number on Home.
 - `safe_today_cents` = floor(spendable_cents / days_left), never below 0.
 - Show the working under the number ("₱4,420 spendable ÷ 7 days until Monday's allowance"). If `allowance_weekday` is not set, ask for it once instead of guessing.
 
-### 8.2 Gig pay tracker (v2)
+### 8.2 Gig pay tracker (v2) — implemented (`/gigs`, migration `20261118000000_gigs.sql`)
 For irregular income such as event shifts.
 - Log a shift: title, date, hours (optional), expected pay. Status starts as `pending`.
 - "Mark paid" asks which wallet received it, creates an `income` transaction, and stores its id on the gig.
 - Gigs screen shows total pending, paid this month, and both lists.
-- Pending gig pay never counts toward balances or safe-to-spend.
+- Pending gig pay never counts toward balances or safe-to-spend. Home shows it as a "gig pay on the way" note.
+- Mark paid / undo / delete are SQL functions (`mark_gig_paid`, `undo_gig_paid`, `delete_gig`) so the gig and its income entry change together. Deleting a gig's income entry from Activity puts the gig back to pending (trigger).
+- New shifts start from the last shift's title, hours and pay.
 
 ## 9. Screens
 Bottom navigation: Home, Activity, Gigs, Insights, Goals. Settings opens from the Home header.
@@ -131,7 +133,7 @@ Mockups: "Sulod — App Mockups" design canvas (https://claude.ai/artifact/HU38J
 3. ✅ Home (balances, safe to spend, this week, recent) and Activity (month view, filters, edit/delete).
 4. ✅ AI text entry (7.1) with confirm screen and 20-line evals (evals still to be run against the real model).
 5. Transfers between wallets, excluded from spending totals (✅ data + form; polish UI).
-6. Gig pay tracker (8.2).
+6. ✅ Gig pay tracker (8.2).
 7. "Can I afford it?" (7.5), with evals for the verdict rules.
 8. Insights charts, then goals.
 9. Screenshot parsing (7.2), PWA install, CSV export.

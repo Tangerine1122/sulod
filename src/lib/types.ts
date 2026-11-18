@@ -51,3 +51,18 @@ export type TransactionDetail = TransactionRow & {
   transfer_to_wallet_id: string | null;
   category_id: string | null;
 };
+
+export type Gig = {
+  id: string;
+  title: string;
+  work_date: string; // YYYY-MM-DD
+  hours: number | null;
+  expected_cents: number;
+  status: "pending" | "paid";
+  paid_at: string | null;
+  wallet_id: string | null;
+  transaction_id: string | null;
+  /** What actually arrived, from the linked income entry. */
+  paid_cents: number | null;
+  wallet_name: string | null;
+};

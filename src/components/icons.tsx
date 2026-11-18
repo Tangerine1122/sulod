@@ -50,3 +50,6 @@ export const TransferIcon = (p: IconProps) => (
 export const PlusIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="M12 5v14M5 12h14" /></svg>
 );
+export const CheckIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M5 12l5 5 9-10" /></svg>
+);

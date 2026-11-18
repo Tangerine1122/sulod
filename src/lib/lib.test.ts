@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatPeso, parsePesoToCents, splitPeso } from "./money";
-import { manilaDayKey, manilaMonthKey, manilaMonthRange, manilaParts, manilaWeekRange, shiftMonth } from "./dates";
+import { formatDayKey, manilaDayKey, manilaMonthKey, manilaMonthRange, manilaParts, manilaWeekRange, shiftMonth } from "./dates";
 import { daysUntilAllowance, safeToSpend } from "./safe-to-spend";
 import { textOn } from "./color";
 import { roughParse } from "./rough-parse";
@@ -114,5 +114,12 @@ describe("month helpers", () => {
     expect(to.toISOString()).toBe("2026-12-31T16:00:00.000Z");
     expect(shiftMonth("2026-12", 1)).toBe("2027-01");
     expect(shiftMonth("2027-01", -1)).toBe("2026-12");
+  });
+});
+
+describe("formatDayKey", () => {
+  it("formats a calendar day as that same day", () => {
+    expect(formatDayKey("2026-11-13", { weekday: "short", month: "short", day: "numeric" })).toBe("Fri, Nov 13");
+    expect(formatDayKey("2026-01-01", { day: "numeric" })).toBe("1");
   });
 });

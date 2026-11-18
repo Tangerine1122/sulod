@@ -222,3 +222,130 @@ export async function signOut(): Promise<void> {
   await supabase.auth.signOut();
   redirect("/login");
 }
+
+// ---------------------------------------------------------------------------
+// Gigs
+// ---------------------------------------------------------------------------
+
+const gigSchema = z.object({
+  title: z.string().trim().min(1, "Give the shift a name").max(60),
+  work_date: z.iso.date("Pick the day you worked"),
+  hours: z
+    .string()
+    .trim()
+    .transform((v, ctx) => {
+      if (v === "") return null;
+      const n = Number(v);
+      if (!Number.isFinite(n) || n <= 0 || n > 24 || Math.round(n * 10) !== n * 10) {
+        ctx.addIssue({ code: "custom", message: "Hours should be a number like 8 or 7.5" });
+        return z.NEVER;
+      }
+      return n;
+    }),
+  expected: pesoField,
+});
+
+function parseGig(form: FormData) {
+  const parsed = gigSchema.safeParse({
+    title: form.get("title") ?? "",
+    work_date: form.get("work_date") ?? "",
+    hours: form.get("hours") ?? "",
+    expected: form.get("expected") ?? "",
+  });
+  if (!parsed.success) return { error: firstError(parsed.error) } as const;
+  // Shifts can be logged ahead, but not absurdly far.
+  const limit = manilaDayKey(new Date(Date.now() + 90 * 86_400_000));
+  if (parsed.data.work_date > limit) return { error: "That date is too far ahead." } as const;
+  return { data: parsed.data } as const;
+}
+
+export async function createGig(_: FormState, form: FormData): Promise<FormState> {
+  await requireUserId();
+  const parsed = parseGig(form);
+  if ("error" in parsed) return { error: parsed.error };
+  const g = parsed.data;
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("gigs")
+    .insert({ title: g.title, work_date: g.work_date, hours: g.hours, expected_cents: g.expected });
+  if (error) return { error: "Couldn't save the shift. Try again." };
+
+  revalidatePath("/", "layout");
+  redirect("/gigs");
+}
+
+export async function updateGig(_: FormState, form: FormData): Promise<FormState> {
+  await requireUserId();
+  const id = idSchema.safeParse(form.get("id"));
+  if (!id.success) return { error: "That shift no longer exists." };
+  const parsed = parseGig(form);
+  if ("error" in parsed) return { error: parsed.error };
+  const g = parsed.data;
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("gigs")
+    .update({ title: g.title, work_date: g.work_date, hours: g.hours, expected_cents: g.expected })
+    .eq("id", id.data);
+  if (error) return { error: "Couldn't save the changes. Try again." };
+
+  revalidatePath("/", "layout");
+  redirect("/gigs");
+}
+
+const markPaidSchema = z.object({
+  id: z.uuid(),
+  wallet_id: z.uuid("Pick the wallet it went into"),
+  amount: pesoField,
+  date: z.iso.date(),
+});
+
+export async function markGigPaid(_: FormState, form: FormData): Promise<FormState> {
+  await requireUserId();
+  const parsed = markPaidSchema.safeParse({
+    id: form.get("id") ?? "",
+    wallet_id: form.get("wallet_id") ?? "",
+    amount: form.get("amount") ?? "",
+    date: form.get("date") ?? "",
+  });
+  if (!parsed.success) return { error: firstError(parsed.error) };
+  const p = parsed.data;
+  if (p.date > manilaDayKey(new Date())) return { error: "That date is in the future." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("mark_gig_paid", {
+    p_gig: p.id,
+    p_wallet: p.wallet_id,
+    p_amount_cents: p.amount,
+    p_paid_at: occurredAtFor(p.date).toISOString(),
+  });
+  if (error) {
+    return { error: error.message.includes("already paid") ? "This shift is already marked paid." : "Couldn't save that. Try again." };
+  }
+
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export async function undoGigPaid(form: FormData): Promise<void> {
+  await requireUserId();
+  const id = idSchema.safeParse(form.get("id"));
+  if (id.success) {
+    const supabase = await createClient();
+    await supabase.rpc("undo_gig_paid", { p_gig: id.data });
+  }
+  revalidatePath("/", "layout");
+  redirect("/gigs");
+}
+
+export async function deleteGig(form: FormData): Promise<void> {
+  await requireUserId();
+  const id = idSchema.safeParse(form.get("id"));
+  if (id.success) {
+    const supabase = await createClient();
+    await supabase.rpc("delete_gig", { p_gig: id.data });
+  }
+  revalidatePath("/", "layout");
+  redirect("/gigs");
+}

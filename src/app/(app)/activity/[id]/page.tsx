@@ -2,11 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { z } from "zod";
+import { deleteTransaction } from "@/app/actions";
+import { ConfirmAction } from "@/components/confirm-action";
 import { ArrowLeftIcon } from "@/components/icons";
 import { getCategories, getTransaction, getWalletBalances } from "@/lib/data";
 import { formatManila, manilaDayKey } from "@/lib/dates";
 import { EntryForm } from "../../add/entry-form";
-import { DeleteButton } from "./delete-button";
 
 export default async function EditEntryPage({ params }: PageProps<"/activity/[id]">) {
   await connection();
@@ -52,7 +53,13 @@ export default async function EditEntryPage({ params }: PageProps<"/activity/[id
         }}
       />
 
-      <DeleteButton id={t.id} />
+      <ConfirmAction
+        action={deleteTransaction}
+        id={t.id}
+        label="Delete entry"
+        confirmLabel="Tap again to delete"
+        pendingLabel="Deleting…"
+      />
     </main>
   );
 }

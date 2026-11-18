@@ -2,10 +2,11 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { manilaWeekRange } from "@/lib/dates";
+import { manilaMonthKey, manilaWeekRange } from "@/lib/dates";
 import type {
   Category,
   CategorySpend,
+  Gig,
   Profile,
   TransactionDetail,
   TransactionRow,
@@ -169,4 +170,81 @@ export async function getTransaction(id: string): Promise<TransactionDetail | nu
   if (error) throw error;
   if (!data) return null;
   return { ...(data as unknown as TransactionDetail), amount_cents: toNumber(data.amount_cents) };
+}
+
+// ---------------------------------------------------------------------------
+// Gigs
+// ---------------------------------------------------------------------------
+
+const GIG_SELECT =
+  "id, title, work_date, hours, expected_cents, status, paid_at, wallet_id, transaction_id, wallet:wallets(name), income:transactions!gigs_transaction_id_fkey(amount_cents)";
+
+type GigRow = Omit<Gig, "paid_cents" | "wallet_name" | "hours" | "expected_cents"> & {
+  hours: number | string | null;
+  expected_cents: number | string;
+  wallet: { name: string } | null;
+  income: { amount_cents: number | string } | null;
+};
+
+function toGig(r: GigRow): Gig {
+  const { wallet, income, ...rest } = r;
+  return {
+    ...rest,
+    hours: r.hours === null ? null : Number(r.hours),
+    expected_cents: toNumber(r.expected_cents),
+    paid_cents: income ? toNumber(income.amount_cents) : null,
+    wallet_name: wallet?.name ?? null,
+  };
+}
+
+/** Pending shifts (oldest first), recently paid ones, and totals for the screen. */
+export async function getGigs(now: Date) {
+  const supabase = await createClient();
+  const [pending, paid] = await Promise.all([
+    supabase.from("gigs").select(GIG_SELECT).eq("status", "pending").order("work_date").order("created_at"),
+    supabase.from("gigs").select(GIG_SELECT).eq("status", "paid").order("paid_at", { ascending: false }).limit(30),
+  ]);
+  if (pending.error) throw pending.error;
+  if (paid.error) throw paid.error;
+
+  const pendingGigs = (pending.data as unknown as GigRow[]).map(toGig);
+  const paidGigs = (paid.data as unknown as GigRow[]).map(toGig);
+  const month = manilaMonthKey(now);
+  const paidThisMonth = paidGigs.filter((g) => g.paid_at && manilaMonthKey(new Date(g.paid_at)) === month);
+
+  return {
+    pending: pendingGigs,
+    paid: paidGigs,
+    pendingCents: pendingGigs.reduce((s, g) => s + g.expected_cents, 0),
+    paidThisMonthCents: paidThisMonth.reduce((s, g) => s + (g.paid_cents ?? g.expected_cents), 0),
+    paidThisMonthCount: paidThisMonth.length,
+  };
+}
+
+export async function getGig(id: string): Promise<Gig | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("gigs").select(GIG_SELECT).eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data ? toGig(data as unknown as GigRow) : null;
+}
+
+/** Sum of pay still owed, for the note on Home. */
+export async function getPendingGigTotal(): Promise<number> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("gigs").select("expected_cents").eq("status", "pending");
+  if (error) throw error;
+  return (data ?? []).reduce((s, g) => s + toNumber(g.expected_cents), 0);
+}
+
+/** The last shift's title and pay, so logging the usual shift is one tap. */
+export async function getLastGig(): Promise<{ title: string; expected_cents: number; hours: number | null } | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("gigs")
+    .select("title, expected_cents, hours")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  return { title: data.title, expected_cents: toNumber(data.expected_cents), hours: data.hours === null ? null : Number(data.hours) };
 }

@@ -5,7 +5,7 @@ import { ArrowRightIcon, SlidersIcon } from "@/components/icons";
 import { TransactionRow } from "@/components/transaction-row";
 import { WalletForm } from "@/components/wallet-form";
 import { Zigzag } from "@/components/zigzag";
-import { getProfile, getRecentTransactions, getWalletBalances, getWeekComparison } from "@/lib/data";
+import { getPendingGigTotal, getProfile, getRecentTransactions, getWalletBalances, getWeekComparison } from "@/lib/data";
 import { formatManila, greeting, weekdayName } from "@/lib/dates";
 import { formatPeso, splitPeso } from "@/lib/money";
 import { safeToSpend } from "@/lib/safe-to-spend";
@@ -36,7 +36,11 @@ export default async function HomePage() {
     );
   }
 
-  const [week, recent] = await Promise.all([getWeekComparison(now), getRecentTransactions()]);
+  const [week, recent, pendingGigCents] = await Promise.all([
+    getWeekComparison(now),
+    getRecentTransactions(),
+    getPendingGigTotal(),
+  ]);
   const total = wallets.reduce((s, w) => s + w.balance_cents, 0);
   const big = splitPeso(total);
   const safe = profile.allowance_weekday === null ? null : safeToSpend(wallets, profile.allowance_weekday, now);
@@ -102,6 +106,18 @@ export default async function HomePage() {
           </div>
         )}
       </section>
+
+      {pendingGigCents > 0 && (
+        <Link
+          href="/gigs"
+          className="-mt-3 flex min-h-11 items-center justify-between gap-2 rounded-xl border-[1.5px] border-dashed border-ink px-3.5 text-[13px]"
+        >
+          <span>
+            <strong className="tabular">{formatPeso(pendingGigCents, { whole: true })}</strong> gig pay on the way
+          </span>
+          <span className="text-muted">not counted yet</span>
+        </Link>
+      )}
 
       {/* Quick add (AI parsing arrives in build step 4; for now it prefills the manual form) */}
       <section aria-label="Quick add" className="flex flex-col gap-2">

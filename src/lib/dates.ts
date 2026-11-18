@@ -67,3 +67,8 @@ export function manilaDayKey(instant: Date | string): string {
   const { y, m, d } = manilaParts(new Date(instant));
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
+
+/** Formats a calendar day ("2026-11-13") without any timezone shift. */
+export function formatDayKey(key: string, opts: Intl.DateTimeFormatOptions): string {
+  return formatManila(new Date(`${key}T12:00:00+08:00`), opts);
+}
