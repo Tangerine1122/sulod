@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { getGoal, getGoals, getWalletBalances, requireUserId } from "@/lib/data";
+import { CATEGORY_HEXES } from "@/lib/category-colors";
+import { getGoal, getGoals, getWallet, getWalletBalances, requireUserId } from "@/lib/data";
 import { unassignedSavings } from "@/lib/goals";
 import { formatPeso, parsePesoToCents } from "@/lib/money";
 import { manilaDayKey, manilaMidnight } from "@/lib/dates";
@@ -454,4 +455,151 @@ export async function adjustGoal(_: FormState, form: FormData): Promise<FormStat
   if (error) return { error: "Couldn't save that. Try again." };
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Wallet editing
+// ---------------------------------------------------------------------------
+
+const walletEditSchema = z.object({
+  id: z.uuid(),
+  name: z.string().trim().min(1, "Give the wallet a name").max(40),
+  type: z.enum(["cash", "debit", "ewallet", "savings"]),
+  balance: z.string().trim().transform((v, ctx) => {
+    // Balances can be zero or negative (an overdrawn card), so this accepts "-120.50".
+    const negative = v.startsWith("-");
+    const cents = v === "" || v === "0" ? 0 : parsePesoToCents(negative ? v.slice(1) : v);
+    if (cents === null) {
+      ctx.addIssue({ code: "custom", message: "Enter the balance like 1780 or 1,780.50" });
+      return z.NEVER;
+    }
+    return negative ? -cents : cents;
+  }),
+});
+
+/**
+ * Renames, retypes and corrects a wallet's balance. A corrected balance is applied by
+ * shifting the starting balance, so every past entry stays exactly as it was.
+ */
+export async function updateWallet(_: FormState, form: FormData): Promise<FormState> {
+  await requireUserId();
+  const parsed = walletEditSchema.safeParse({
+    id: form.get("id") ?? "",
+    name: form.get("name") ?? "",
+    type: form.get("type") ?? "",
+    balance: form.get("balance") ?? "",
+  });
+  if (!parsed.success) return { error: firstError(parsed.error) };
+  const w = parsed.data;
+
+  const current = await getWallet(w.id);
+  if (!current || current.archived || current.balance_cents === null) return { error: "That wallet no longer exists." };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("wallets")
+    .update({
+      name: w.name,
+      type: w.type,
+      counts_as_spendable: w.type !== "savings",
+      starting_balance_cents: current.starting_balance_cents + (w.balance - current.balance_cents),
+    })
+    .eq("id", w.id);
+  if (error) return { error: "Couldn't save the wallet. Try again." };
+
+  revalidatePath("/", "layout");
+  redirect("/settings");
+}
+
+async function setArchived(form: FormData, archived: boolean) {
+  await requireUserId();
+  const id = idSchema.safeParse(form.get("id"));
+  if (id.success) {
+    const supabase = await createClient();
+    await supabase.from("wallets").update({ archived }).eq("id", id.data);
+  }
+  revalidatePath("/", "layout");
+  redirect("/settings");
+}
+
+/** Hides a wallet that has history. Its entries stay and still count in spending totals. */
+export async function archiveWallet(form: FormData): Promise<void> {
+  await setArchived(form, true);
+}
+
+export async function restoreWallet(form: FormData): Promise<void> {
+  await setArchived(form, false);
+}
+
+/** Deletes a wallet only if nothing uses it; otherwise it is archived instead. */
+export async function deleteWallet(form: FormData): Promise<void> {
+  await requireUserId();
+  const id = idSchema.safeParse(form.get("id"));
+  if (id.success) {
+    const w = await getWallet(id.data);
+    const supabase = await createClient();
+    if (w && w.entry_count === 0) {
+      await supabase.from("wallets").delete().eq("id", id.data);
+    } else if (w) {
+      await supabase.from("wallets").update({ archived: true }).eq("id", id.data);
+    }
+  }
+  revalidatePath("/", "layout");
+  redirect("/settings");
+}
+
+// ---------------------------------------------------------------------------
+// Categories
+// ---------------------------------------------------------------------------
+
+const categorySchema = z.object({
+  name: z.string().trim().min(1, "Give the category a name").max(30),
+  color: z.enum(CATEGORY_HEXES, "Pick a color"),
+});
+
+function parseCategory(form: FormData) {
+  return categorySchema.safeParse({ name: form.get("name") ?? "", color: form.get("color") ?? "" });
+}
+
+const duplicateName = (e: { code?: string } | null) => e?.code === "23505";
+
+export async function createCategory(_: FormState, form: FormData): Promise<FormState> {
+  await requireUserId();
+  const parsed = parseCategory(form);
+  if (!parsed.success) return { error: firstError(parsed.error) };
+  const supabase = await createClient();
+  const { error } = await supabase.from("categories").insert({ name: parsed.data.name, color: parsed.data.color });
+  if (duplicateName(error)) return { error: `You already have a category called "${parsed.data.name}".` };
+  if (error) return { error: "Couldn't save the category. Try again." };
+  revalidatePath("/", "layout");
+  redirect("/settings");
+}
+
+export async function updateCategory(_: FormState, form: FormData): Promise<FormState> {
+  await requireUserId();
+  const id = idSchema.safeParse(form.get("id"));
+  if (!id.success) return { error: "That category no longer exists." };
+  const parsed = parseCategory(form);
+  if (!parsed.success) return { error: firstError(parsed.error) };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("categories")
+    .update({ name: parsed.data.name, color: parsed.data.color })
+    .eq("id", id.data);
+  if (duplicateName(error)) return { error: `You already have a category called "${parsed.data.name}".` };
+  if (error) return { error: "Couldn't save the category. Try again." };
+  revalidatePath("/", "layout");
+  redirect("/settings");
+}
+
+/** Its entries become Uncategorized (the foreign key sets them to null). */
+export async function deleteCategory(form: FormData): Promise<void> {
+  await requireUserId();
+  const id = idSchema.safeParse(form.get("id"));
+  if (id.success) {
+    const supabase = await createClient();
+    await supabase.from("categories").delete().eq("id", id.data);
+  }
+  revalidatePath("/", "layout");
+  redirect("/settings");
 }

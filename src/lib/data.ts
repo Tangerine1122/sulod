@@ -353,3 +353,63 @@ export async function getGoal(id: string): Promise<Goal | null> {
   if (error) throw error;
   return data ? toGoal(data as GoalRow) : null;
 }
+
+// ---------------------------------------------------------------------------
+// Settings: wallets and categories
+// ---------------------------------------------------------------------------
+
+export type WalletDetail = {
+  id: string;
+  name: string;
+  type: WalletBalanceRow["type"];
+  starting_balance_cents: number;
+  archived: boolean;
+  /** Current balance (only for active wallets; archived ones aren't in the balances view). */
+  balance_cents: number | null;
+  /** Entries that use this wallet, as source or transfer target. */
+  entry_count: number;
+};
+
+export async function getWallet(id: string): Promise<WalletDetail | null> {
+  const supabase = await createClient();
+  const { data: w, error } = await supabase
+    .from("wallets")
+    .select("id, name, type, starting_balance_cents, archived")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!w) return null;
+  const [bal, count] = await Promise.all([
+    supabase.from("wallet_balances").select("balance_cents").eq("id", id).maybeSingle(),
+    supabase
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .or(`wallet_id.eq.${id},transfer_to_wallet_id.eq.${id}`),
+  ]);
+  if (bal.error) throw bal.error;
+  if (count.error) throw count.error;
+  return {
+    ...w,
+    starting_balance_cents: toNumber(w.starting_balance_cents),
+    balance_cents: bal.data ? toNumber(bal.data.balance_cents) : null,
+    entry_count: count.count ?? 0,
+  };
+}
+
+export async function getArchivedWallets(): Promise<{ id: string; name: string; type: WalletBalanceRow["type"] }[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("wallets").select("id, name, type").eq("archived", true).order("name");
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getCategory(id: string): Promise<(Category & { entry_count: number }) | null> {
+  const supabase = await createClient();
+  const [cat, count] = await Promise.all([
+    supabase.from("categories").select("id, name, icon, color, is_default").eq("id", id).maybeSingle(),
+    supabase.from("transactions").select("id", { count: "exact", head: true }).eq("category_id", id),
+  ]);
+  if (cat.error) throw cat.error;
+  if (count.error) throw count.error;
+  return cat.data ? { ...cat.data, entry_count: count.count ?? 0 } : null;
+}

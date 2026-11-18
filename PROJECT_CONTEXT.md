@@ -134,6 +134,8 @@ Bottom navigation: Home, Activity, Gigs, Insights, Goals. Settings opens from th
 6. **Insights**: category breakdown, weekly trend, weekly AI summary.
 7. **Goals**: savings goals with progress bars.
 8. **Settings**: wallets, categories, allowance day, export CSV.
+   - Wallets (`/settings/wallets/[id]`): rename, change type (savings ⇔ not spendable), fix the balance (shifts `starting_balance_cents` so past entries are untouched). Delete only when no entries use it; otherwise archive (hidden from Home, forms and balances; its entries still show and count). Archived wallets can be restored.
+   - Categories (`/settings/categories/new`, `/[id]`): add, rename, recolor from 12 preset colors (`src/lib/category-colors.ts`), delete (its entries become Uncategorized).
 
 ## 10. Design direction
 Mockups: "Sulod — App Mockups" design canvas (https://claude.ai/artifact/HU38JUri2fz5UiYyVvn9KP).

@@ -58,4 +58,5 @@ Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · Supabase (Postgres, 
 - [x] "Can I afford it?": YES / TIGHT / NOT YET from your real balances, explained by the AI
 - [x] Insights: week/month by category and day, vs the same days before
 - [x] Goals: set money aside from savings, weekly amount to hit a date
+- [x] Edit wallets (rename, type, fix balance, archive) and categories (add, rename, recolor, delete)
 - [ ] Receipt scanning, PWA, CSV export
