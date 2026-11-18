@@ -147,7 +147,12 @@ export default async function HomePage() {
             </button>
           </div>
         </form>
-        <p className="text-[13px] text-muted">Type it like a text. You check it before it saves.</p>
+        <p className="text-[13px] text-muted">
+          Type it like a text. You check it before it saves. Or ask:{" "}
+          <Link href="/afford" className="font-semibold text-ink underline underline-offset-2">
+            can I afford it?
+          </Link>
+        </p>
       </section>
 
       {/* This week */}

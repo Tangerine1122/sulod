@@ -2,7 +2,8 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { manilaMonthKey, manilaWeekRange } from "@/lib/dates";
+import { HISTORY_WINDOW_DAYS } from "@/lib/afford";
+import { manilaDayKey, manilaMidnight, manilaMonthKey, manilaWeekRange } from "@/lib/dates";
 import type {
   Category,
   CategorySpend,
@@ -247,4 +248,29 @@ export async function getLastGig(): Promise<{ title: string; expected_cents: num
     .maybeSingle();
   if (!data) return null;
   return { title: data.title, expected_cents: toNumber(data.expected_cents), hours: data.hours === null ? null : Number(data.hours) };
+}
+
+// ---------------------------------------------------------------------------
+// Afford
+// ---------------------------------------------------------------------------
+
+/** Spending over the last 28 days, and how many days of history exist (Manila days). */
+export async function getSpendingHistory(now: Date) {
+  const supabase = await createClient();
+  const windowStart = new Date(now.getTime() - HISTORY_WINDOW_DAYS * 86_400_000);
+  const [recent, first] = await Promise.all([
+    supabase.from("transactions").select("amount_cents").eq("type", "expense").gte("occurred_at", windowStart.toISOString()),
+    supabase.from("transactions").select("occurred_at").order("occurred_at").limit(1).maybeSingle(),
+  ]);
+  if (recent.error) throw recent.error;
+  if (first.error) throw first.error;
+
+  const expenseCents = (recent.data ?? []).reduce((s, t) => s + toNumber(t.amount_cents), 0);
+  let historyDays = 0;
+  if (first.data) {
+    const startKey = manilaDayKey(first.data.occurred_at);
+    const [y, m, d] = startKey.split("-").map(Number);
+    historyDays = Math.floor((now.getTime() - manilaMidnight(y, m, d).getTime()) / 86_400_000) + 1;
+  }
+  return { expenseCents, historyDays };
 }

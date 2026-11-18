@@ -65,7 +65,7 @@ Rules:
 - Always show a confirm/edit card before saving; never write silently.
 - Handle Taglish/Cebuano shorthand ("kan-on 120", "pamasahe 20").
 - Implemented in `src/lib/quick-add/core.ts` (model call + deterministic `resolve`) and `/add` (confirm screen).
-- Models via AI Gateway, tried in order until one is allowed (free tier only covers some): GPT-5.4 nano (works on the free tier, ~$0.0003 per entry), Gemini 2.5 Flash Lite, GPT-5 nano, then Claude Haiku 5.5 and Gemini 3.1 Flash Lite (both refused on the free tier). Force one with `QUICK_ADD_MODEL`. Output uses `generateText` + `Output.object` with category/wallet enums built from the user's own names.
+- Models via AI Gateway (`src/lib/ai/models.ts`, shared with 7.5), tried in order until one is allowed (free tier only covers some): GPT-5.4 nano (works on the free tier, ~$0.0003 per entry), Gemini 2.5 Flash Lite, GPT-5 nano, then Claude Haiku 5.5 and Gemini 3.1 Flash Lite (both refused on the free tier). Force one with `QUICK_ADD_MODEL`. Output uses `generateText` + `Output.object` with category/wallet enums built from the user's own names.
 - The model returns the amount as written and a date; code converts to centavos, rejects future or older-than-a-year dates, maps names to ids, and applies the 0.6 threshold.
 - If the call fails or times out (8 s), `/add` falls back to `src/lib/rough-parse.ts` (amount + merchant only).
 - AI-filled entries save `source = 'ai_text'`, `ai_confidence` and `raw_input`.
@@ -80,7 +80,7 @@ Weekly summary generated from aggregated numbers (not raw rows): top categories,
 ### 7.4 Learning from corrections (v3)
 Store merchant -> category overrides; apply them before calling the model.
 
-### 7.5 "Can I afford it?" (v2)
+### 7.5 "Can I afford it?" (v2) — implemented (`src/lib/afford.ts`, `src/lib/afford-ai.ts`, `/afford`)
 Typed into the same quick-add box as a question ("can I buy 2500 shoes?"). The model does two small jobs; the code does everything in between.
 1. Parse (model): `{ item, amount_cents }`. If there is no amount, ask for it.
 2. Compute (code, no AI): spendable balance, days left until the next allowance, daily amount after buying, usual daily spend (average of expenses over the last 28 days), pending gig pay, savings balance.
@@ -90,6 +90,11 @@ Typed into the same quick-add box as a question ("can I buy 2500 shoes?"). The m
    - `yes` if daily-after is at or above usual daily spend.
 4. Explain (model): 2-3 sentences that restate the computed numbers and verdict. It never changes the verdict or does arithmetic.
 Rules: never count savings wallets or pending gig pay as available; mention them as context only. Offer "Log this purchase", which opens the normal confirm card.
+Implementation notes:
+- The quick-add model returns `kind: "afford"` with `item` and the price; `/add` redirects to `/afford?item=&amount=`. If the AI is down, a keyword check ("afford", "can I buy", "kaya ba", "pwede ba") still routes it. `/afford` with no price shows a small form.
+- Usual daily spend = expenses in the last 28 days ÷ min(28, days of history); under 3 days of history it is "unknown" and the verdict is `yes` with a caveat (or `not_yet` if short).
+- No allowance day set: assumes 7 days and says so.
+- The explanation uses the shared model list (`src/lib/ai/models.ts`). `checkExplanation` accepts it only if it starts with the fixed verdict and every number in it is one we computed; otherwise the plain template from `explain()` is shown.
 
 ## 8. Money features (computed, no AI)
 ### 8.1 Safe to spend today (v1) — implemented in `src/lib/safe-to-spend.ts`
@@ -134,7 +139,7 @@ Mockups: "Sulod — App Mockups" design canvas (https://claude.ai/artifact/HU38J
 4. ✅ AI text entry (7.1) with confirm screen and 20-line evals (evals still to be run against the real model).
 5. Transfers between wallets, excluded from spending totals (✅ data + form; polish UI).
 6. ✅ Gig pay tracker (8.2).
-7. "Can I afford it?" (7.5), with evals for the verdict rules.
+7. ✅ "Can I afford it?" (7.5), with unit tests for every verdict rule.
 8. Insights charts, then goals.
 9. Screenshot parsing (7.2), PWA install, CSV export.
 10. Weekly AI summary and merchant overrides (7.3, 7.4).

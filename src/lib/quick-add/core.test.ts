@@ -17,6 +17,7 @@ const ctx = {
 
 const base: ModelOutput = {
   kind: "entry",
+  item: null,
   type: "expense",
   amount: "180",
   merchant: "Jollibee",
@@ -103,5 +104,19 @@ describe("fallback", () => {
       isEntry: true,
       defaults: { amount: "85", merchant: "7-eleven", date: "2026-11-17" },
     });
+  });
+});
+
+describe("afford questions", () => {
+  it("passes item and price through", () => {
+    const r = resolve("can i afford 2500 shoes?", { ...base, kind: "afford", item: "Shoes", amount: "2500" }, ctx);
+    expect(r.afford).toEqual({ item: "Shoes", amountCents: 250000 });
+    expect(r.isEntry).toBe(false);
+  });
+
+  it("are recognized by the fallback too", () => {
+    expect(fallback("can i afford 2500 shoes?", ctx).afford).toEqual({ item: "shoes", amountCents: 250000 });
+    expect(fallback("kaya ba 1,500 sapatos", ctx).afford).toEqual({ item: "sapatos", amountCents: 150000 });
+    expect(fallback("jollibee 180", ctx).afford).toBeUndefined();
   });
 });

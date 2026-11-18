@@ -12,24 +12,9 @@ import { z } from "zod";
 import { manilaDayKey, weekdayName, manilaParts } from "../dates";
 import { parsePesoToCents } from "../money";
 import { roughParse } from "../rough-parse";
+import { withModels } from "../ai/models";
 import type { Category, TransactionType, WalletBalanceRow } from "../types";
 
-/**
- * Small, cheap models with structured output, tried in order. The free AI Gateway tier only
- * allows some models, so a refused model (401/402/403/404) moves on to the next one. The
- * first model that works is remembered for the life of the server instance.
- * Set QUICK_ADD_MODEL to force one model.
- */
-export const QUICK_ADD_MODELS = process.env.QUICK_ADD_MODEL
-  ? [process.env.QUICK_ADD_MODEL]
-  : [
-      "openai/gpt-5.4-nano", // confirmed working on the free tier (Nov 2026)
-      "google/gemini-2.5-flash-lite",
-      "openai/gpt-5-nano",
-      "anthropic/claude-haiku-5.5", // 403 on the free tier; used if credits are bought
-      "google/gemini-3.1-flash-lite", // 403 on the free tier
-    ];
-let workingModel: string | null = null;
 export const CONFIDENCE_THRESHOLD = 0.6;
 export const MAX_INPUT = 200;
 
@@ -50,7 +35,10 @@ export function outputSchema(ctx: Pick<Ctx, "categories" | "wallets">) {
   const walletField = ctx.wallets.length ? z.enum(names(ctx.wallets)).nullable() : z.null();
 
   return z.object({
-    kind: z.enum(["entry", "not_entry"]).describe('"not_entry" for questions, greetings, or lines with no amount'),
+    kind: z
+      .enum(["entry", "afford", "not_entry"])
+      .describe('"afford" when asking whether they can afford or buy something; "not_entry" for other questions, greetings, or lines with no amount'),
+    item: z.string().nullable().describe('"afford" only: the thing they want to buy, short ("Shoes")'),
     type: z.enum(["expense", "income", "transfer"]),
     amount: z
       .string()
@@ -85,6 +73,7 @@ Rules:
 - wallet / to_wallet: match the user's wallet names loosely ("gotyme" = "GoTyme", "landbank card" = "Landbank", "cash" or "hand" = the cash wallet). null when not mentioned.
 - date: today is ${today} (${weekday}). "yesterday", "gahapon" and "kahapon" mean the day before. A weekday name means the most recent one on or before today. Never return a date after today. Default to today.
 - note: a short useful detail in plain English, or null. Translate meal words: "kan-on" or "panihapon" = "Dinner", "paniudto" = "Lunch", "pamahaw" = "Breakfast", "merienda" = "Snack".
+- kind "afford": the line asks whether they can afford or buy something ("can i afford 2500 shoes?", "kaya ba nako mopalit ug 1500 nga sapatos", "pwede ba bumili ng 800 headphones"). Put the price in amount and the thing in item.
 - confidence: 0 to 1. Go below ${CONFIDENCE_THRESHOLD} if you had to guess the category or the amount.
 
 Glossary: pamasahe / plete = fare, load = mobile load, baon = packed food or allowance, sukli = change, utang = debt, sweldo / sahod = salary, palit = bought.
@@ -103,43 +92,23 @@ Line:
   return { system, prompt };
 }
 
-/** True for errors that mean "this model isn't available to you", where trying another helps. */
-function isRefusal(error: unknown): boolean {
-  const e = error as { statusCode?: number; name?: string };
-  return [401, 402, 403, 404].includes(e?.statusCode ?? 0) || /ModelNotFound|Authentication/.test(e?.name ?? "");
-}
-
 export async function askModel(text: string, ctx: Ctx): Promise<ModelOutput> {
   const { system, prompt } = buildPrompt(text, ctx);
-  const candidates = workingModel ? [workingModel, ...QUICK_ADD_MODELS.filter((m) => m !== workingModel)] : QUICK_ADD_MODELS;
-  const started = Date.now();
-  let lastError: unknown;
-
-  for (const model of candidates) {
-    const remaining = 10_000 - (Date.now() - started);
-    if (remaining < 1500) break;
-    try {
+  return withModels(
+    "quick-add",
+    async (model, timeout) => {
       const { output } = await generateText({
         model,
         system,
         prompt,
         output: Output.object({ schema: outputSchema(ctx), name: "entry" }),
-        timeout: Math.min(8000, remaining),
+        timeout,
         maxRetries: 0,
       });
-      if (workingModel !== model) console.info(`quick-add: using ${model}`);
-      workingModel = model;
       return output;
-    } catch (error) {
-      lastError = error;
-      const e = error as { name?: string; statusCode?: number; message?: string };
-      console.error(
-        `quick-add: ${model} failed ${e?.name ?? "Error"} ${e?.statusCode ?? ""} ${String(e?.message ?? "").replaceAll(text, "[input]").slice(0, 300)}`,
-      );
-      if (!isRefusal(error)) break; // timeouts and bad output won't get better on another model
-    }
-  }
-  throw lastError;
+    },
+    { redact: text },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -153,6 +122,8 @@ export type QuickAddResult = {
   confidence: number | null;
   /** True when the category should be asked instead of guessed. */
   askCategory: boolean;
+  /** Set when the line was a "can I afford it?" question instead of an entry. */
+  afford?: { item: string; amountCents: number | null };
   defaults: {
     type: TransactionType;
     amount: string;
@@ -190,8 +161,14 @@ export function resolve(text: string, out: ModelOutput, ctx: Ctx): QuickAddResul
   let toWalletId = type === "transfer" ? byName(ctx.wallets, out.to_wallet) : undefined;
   if (toWalletId && toWalletId === walletId) toWalletId = undefined;
 
+  const afford =
+    out.kind === "afford"
+      ? { item: (out.item ?? out.merchant ?? "").trim().slice(0, 60), amountCents: cents }
+      : undefined;
+
   return {
     via: "ai",
+    afford,
     isEntry: out.kind === "entry" && cents !== null,
     confidence,
     askCategory: type === "expense" && !categoryId,
@@ -209,10 +186,22 @@ export function resolve(text: string, out: ModelOutput, ctx: Ctx): QuickAddResul
 }
 
 /** What we show when the model is unavailable: the old amount + merchant prefill. */
+const AFFORD_WORDS = /\bafford\b|\bcan i (buy|get)\b|\bkaya ba\b|\bpwede ba\b|\bmapalit\b/i;
+const AFFORD_FILLER =
+  /\b(can|could|i|afford|buy|get|kaya|pwede|ba|nako|ko|mopalit|mapalit|bumili|ng|ug|nga|na|a|an|the)\b/gi;
+
 export function fallback(text: string, ctx: Pick<Ctx, "now">): QuickAddResult {
   const rough = roughParse(text);
+  // Even without the AI, an obvious "can I afford…" question goes to the afford screen.
+  const afford = AFFORD_WORDS.test(text)
+    ? {
+        item: rough.merchant.replace(AFFORD_FILLER, " ").replace(/[?]/g, "").replace(/\s+/g, " ").trim().slice(0, 60),
+        amountCents: parsePesoToCents(rough.amount),
+      }
+    : undefined;
   return {
     via: "fallback",
+    afford,
     isEntry: rough.amount !== "",
     confidence: null,
     askCategory: false,

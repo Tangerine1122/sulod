@@ -4,11 +4,12 @@ import { redirect } from "next/navigation";
 import { ArrowLeftIcon } from "@/components/icons";
 import { getCategories, getWalletBalances } from "@/lib/data";
 import { manilaDayKey } from "@/lib/dates";
+import { parsePesoToCents } from "@/lib/money";
 import { MAX_INPUT, quickAdd, type QuickAddResult } from "@/lib/quick-add";
 import { EntryForm, type EntryDefaults } from "./entry-form";
 
 export default async function AddPage({ searchParams }: PageProps<"/add">) {
-  const { q } = await searchParams;
+  const { q, merchant, amount } = await searchParams;
   await connection();
   const typed = typeof q === "string" ? q.trim().slice(0, MAX_INPUT) : "";
   const [wallets, categories] = await Promise.all([getWalletBalances(), getCategories()]);
@@ -17,13 +18,26 @@ export default async function AddPage({ searchParams }: PageProps<"/add">) {
   const now = new Date();
   const result = typed ? await quickAdd(typed, { now, wallets, categories }) : null;
 
+  // "Can I afford…?" questions get their own screen.
+  if (result?.afford) {
+    const params = new URLSearchParams({ item: result.afford.item });
+    if (result.afford.amountCents !== null) params.set("amount", (result.afford.amountCents / 100).toFixed(2));
+    redirect(`/afford?${params}`);
+  }
+
+  // Plain prefill (e.g. "Log this purchase" from the afford screen), no AI.
+  const prefill: EntryDefaults = {
+    merchant: typeof merchant === "string" ? merchant.slice(0, 80) : undefined,
+    amount: typeof amount === "string" && parsePesoToCents(amount) !== null ? amount : undefined,
+  };
+
   const defaults: EntryDefaults = result
     ? {
         ...result.defaults,
         askCategory: result.via === "ai" && result.isEntry && result.askCategory,
         ai: result.via === "ai" && result.isEntry ? { confidence: result.confidence ?? 0, raw: typed } : undefined,
       }
-    : {};
+    : prefill;
 
   return (
     <main className="flex flex-col gap-5 px-4 pt-5 pb-8">
